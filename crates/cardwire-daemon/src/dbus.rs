@@ -3,8 +3,8 @@ use log::{info, warn};
 use zbus::{fdo, interface};
 
 use crate::config::Config;
-use crate::models::{Daemon, GpuRow, Modes};
-
+use crate::models::{Daemon, Modes};
+use cardwire_core::gpu::GpuRow;
 #[interface(name = "com.cardwire.daemon")]
 impl Daemon {
     pub(crate) async fn set_mode(&self, mode: Modes) -> fdo::Result<String> {
@@ -85,6 +85,19 @@ impl Daemon {
 
     pub(crate) async fn list_gpus(&self) -> Vec<GpuRow> {
         //self.list_gpu_rows().await
-        vec![]
+        let mut rows = Vec::with_capacity(self.state.gpu_list.len());
+        for gpu in self.state.gpu_list.values() {
+            let blocked = false;
+            rows.push((
+                gpu.id() as u32,
+                gpu.name().to_string(),
+                gpu.pci_address().to_string(),
+                gpu.render_node().to_string(),
+                gpu.is_default(),
+                blocked,
+            ));
+        }
+        rows.sort_by_key(|row| row.0);
+        rows
     }
 }
