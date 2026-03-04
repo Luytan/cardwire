@@ -75,7 +75,15 @@ impl Daemon {
             .get(&(gpu_id as usize))
             .ok_or_else(|| fdo::Error::InvalidArgs(format!("Unknown gpu id={}", gpu_id)))?;
 
-        // block gpu
+        // prevent default gpu from being blocked
+        if gpu.is_default() {
+            warn!("Cannot set block state for GPU {}: device is marked as default", gpu_id);
+            return Err(fdo::Error::AccessDenied(format!(
+                "GPU {} is the default device and cannot be blocked",
+                gpu_id
+            )));
+        }
+
         let mut blocker = self.state.ebpf_blocker.write().await;
         block_gpu(&mut blocker, gpu, block).map_err(|err| fdo::Error::Failed(err.to_string()))?;
         
