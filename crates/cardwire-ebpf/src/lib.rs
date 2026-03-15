@@ -1,7 +1,12 @@
+mod errors;
+
 use aya::maps::{HashMap, MapError};
 use aya::programs::Lsm;
 use aya::{Btf, Ebpf};
-use std::io::{Error as IoError, ErrorKind};
+use flate2::read::GzDecoder;
+use std::fs::File;
+use std::io::{BufReader, Error as IoError, ErrorKind, Read};
+use crate::errors::CardwireBPFError;
 
 pub struct EbpfBlocker {
     ebpf: Ebpf,
@@ -11,23 +16,42 @@ impl EbpfBlocker {
     fn missing_entity(kind: &str, name: &str) -> IoError {
         IoError::new(ErrorKind::NotFound, format!("{} not found: {}", kind, name))
     }
+    /*
+        Checks if bpf/lsm is enabled in the kernel
+     */
+    fn is_bpf_enabled() -> Result<(), CardwireBPFError> {
+        // Method 1
+        if let Ok(lsm) = std::fs::read_to_string("/sys/kernel/security/lsm") {
+            match lsm.contains("bpf"){
+                true => return Ok(()),
+                false => return Err(CardwireBPFError::LSMNotEnabled)
+            };
+        };
 
-    fn pci_key(pci: &str) -> [u8; 16] {
-        let mut key = [0u8; 16];
-        let bytes = pci.as_bytes();
-        let len = bytes.len().min(15);
-        key[..len].copy_from_slice(&bytes[..len]);
-        key[len] = 0;
-        key
+        // Method 2
+        let file = match File::open("/proc/config.gz") {
+            Ok(f) => f,
+            Err(_) => return Err(CardwireBPFError::LSMNotEnabled),
+        };
+
+        let file = BufReader::new(file);
+        let mut gz = GzDecoder::new(file);
+        let mut config = String::new();
+
+        gz.read_to_string(&mut config)?;
+
+        match config.contains("CONFIG_BPF_LSM=y"){
+            true => return Ok(()),
+            false => return Err(CardwireBPFError::LSMNotEnabled)
+        }
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
-            env!("OUT_DIR"),
-            "/bpf.o"
-        )))?;
+        Self::is_bpf_enabled()?;
+        let mut ebpf = Ebpf::load_file(concat!(env!("OUT_DIR"), "/bpf.o"))?;
 
         let btf = Btf::from_sys_fs()?;
+
         let program: &mut Lsm = ebpf
             .program_mut("file_open")
             .ok_or_else(|| Self::missing_entity("program", "file_open"))?
@@ -36,6 +60,15 @@ impl EbpfBlocker {
         program.attach()?;
 
         Ok(Self { ebpf })
+    }
+
+    fn pci_key(pci: &str) -> [u8; 16] {
+        let mut key = [0u8; 16];
+        let bytes = pci.as_bytes();
+        let len = bytes.len().min(15);
+        key[..len].copy_from_slice(&bytes[..len]);
+        key[len] = 0;
+        key
     }
 
     pub fn block_id(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
