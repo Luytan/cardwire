@@ -1,5 +1,4 @@
 #include <linux/bpf.h>
-#include <linux/errno.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
@@ -30,7 +29,6 @@ struct file {
 
 char _license[] SEC("license") = "GPL";
 
-/* Maps to store blocked IDs and PCI addresses */
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
@@ -45,79 +43,93 @@ struct {
     __type(value, u8);
 } BLOCKED_PCI SEC(".maps");
 
-/**
- * Helper to check if a name matches a blocked PCI address,
- * a renderD<id>, or a card<id>
- */
-static __always_inline int is_blocked(char *name) {
-    /* 1. Check for PCI address format: XXXX:XX:XX.X */
-    if (name[4] == ':' && name[7] == ':' && name[10] == '.') {
-        name[11] = '0';  /* Force function to 0 */
-        name[12] = '\0'; /* Null terminate early */
-        
-        u8 *value = bpf_map_lookup_elem(&BLOCKED_PCI, name);
-        return (value && *value == 1);
+SEC("lsm/file_open")
+int BPF_PROG(file_open, struct file *file) {
+    struct dentry *dentry = BPF_CORE_READ(file, f_path.dentry);
+    const unsigned char *name = BPF_CORE_READ(dentry, d_name.name);
+
+    if (!name) {
+        return 0;
     }
 
-    /* 2. Check for card<id> or renderD<id> */
-    const char *p = NULL;
-    if (name[0] == 'c' && name[1] == 'a' && name[2] == 'r' && name[3] == 'd') {
-        p = name + 4;
-    } else if (name[0] == 'r' && name[1] == 'e' && name[2] == 'n' && name[3] == 'd' && 
-               name[4] == 'e' && name[5] == 'r' && name[6] == 'D') {
-        p = name + 7;
-    }
+    // Read file name prefix.
+    char buf[8] = {0};
+    bpf_probe_read_kernel_str(&buf, sizeof(buf), name);
 
-    /* If prefix matched, parse the numeric ID */
-    if (p) {
-        u32 id = 0;
+    u32 id = 0;
+    int is_match = 0;
+
+    // Match renderD<id>.
+    if (buf[0] == 'r' && buf[1] == 'e' && buf[2] == 'n' && buf[3] == 'd' && 
+        buf[4] == 'e' && buf[5] == 'r' && buf[6] == 'D') {
+
+        // Parse up to 3 digits.
+        char id_buf[4] = {0};
+        bpf_probe_read_kernel_str(&id_buf, sizeof(id_buf), name + 7);
+
         #pragma unroll
-        for (int i = 0; i < 7; i++) {
-            if (p[i] >= '0' && p[i] <= '9') {
-                id = id * 10 + (p[i] - '0');
+        for (int i = 0; i < 3; i++) {
+            if (id_buf[i] >= '0' && id_buf[i] <= '9') {
+                id = id * 10 + (id_buf[i] - '0');
+                is_match = 1;
             } else {
                 break;
             }
         }
+    } 
+    // Match card<id>.
+    else if (buf[0] == 'c' && buf[1] == 'a' && buf[2] == 'r' && buf[3] == 'd') {
         
-        u8 *value = bpf_map_lookup_elem(&BLOCKED_IDS, &id);
-        return (value && *value == 1);
+        char id_buf[4] = {0};
+        bpf_probe_read_kernel_str(&id_buf, sizeof(id_buf), name + 4);
+
+        #pragma unroll
+        for (int i = 0; i < 3; i++) {
+            if (id_buf[i] >= '0' && id_buf[i] <= '9') {
+                id = id * 10 + (id_buf[i] - '0');
+                is_match = 1;
+            } else {
+                break;
+            }
+        }
     }
-
-    return 0;
-}
-
-/* Blocks the actual opening of the file */
-SEC("lsm/file_open")
-int BPF_PROG(file_open, struct file *file) {
-    struct dentry *dentry = BPF_CORE_READ(file, f_path.dentry);
-
-    #pragma unroll
-    for (int i = 0; i < 5; i++) {
-        if (!dentry) break;
-
-        const unsigned char *name_ptr = BPF_CORE_READ(dentry, d_name.name);
-        if (!name_ptr) break;
-
-        char buf[16] = {0};
-        bpf_probe_read_kernel_str(&buf, sizeof(buf), name_ptr);
-        /* i == 0 means we are looking at the exact file being opened */
-        if (i == 0 && 
-            buf[0] == 'p' && buf[1] == 'o' && buf[2] == 'w' && buf[3] == 'e' &&
-            buf[4] == 'r' && buf[5] == '_' && buf[6] == 's' && buf[7] == 't' &&
-            buf[8] == 'a' && buf[9] == 't' && buf[10] == 'e' && buf[11] == '\0') {
-            return 0;
-        }
-
-        if (is_blocked(buf)) {
-            return -ENOENT; 
-        }
+    // Match config under PCI device directory.
+    else if (buf[0] == 'c' && buf[1] == 'o' && buf[2] == 'n' && buf[3] == 'f' && 
+             buf[4] == 'i' && buf[5] == 'g' && buf[6] == '\0') {
 
         struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
-        /* Stop if we reached the root or a null parent */
-        if (!parent || parent == dentry) break; 
-        dentry = parent;
+        const unsigned char *parent_name = BPF_CORE_READ(parent, d_name.name);
+
+        if (parent_name) {
+            char pci_addr[16] = {0};
+            bpf_probe_read_kernel_str(&pci_addr, sizeof(pci_addr), parent_name);
+
+            // Accept only PCI-like parent names: 0000:00:00.0.
+            if (pci_addr[4] == ':' && pci_addr[7] == ':' && pci_addr[10] == '.') {
+                
+                bpf_printk("Checking config for PCI: %s", pci_addr);
+                
+                // Force the function number to always be '0'
+                // This converts "0000:03:00.1" -> "0000:03:00.0"
+                pci_addr[11] = '0'; 
+                pci_addr[12] = '\0'; 
+
+                // Now look up the base address in the map
+                u8 *value = bpf_map_lookup_elem(&BLOCKED_PCI, &pci_addr);
+                if (value && *value == 1) {
+                    bpf_printk("Blocked config for PCI: %s", pci_addr);
+                    return -ENOENT;
+                }
+            }
+        }
     }
-    
+
+    if (is_match) {
+        u8 *value = bpf_map_lookup_elem(&BLOCKED_IDS, &id);
+        if (value && *value == 1) {
+            return -ENOENT;
+        }
+    }
+
     return 0;
 }
