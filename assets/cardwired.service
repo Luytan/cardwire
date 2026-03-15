@@ -1,9 +1,7 @@
 [Unit]
 Description=Cardwire Daemon
 Before=graphical.target
-Before=multi-user.target
 Before=display-manager.service
-Before=nvidia-powerd.service
 
 
 [Service]
@@ -14,4 +12,4 @@ Restart=on-failure
 RestartSec=5s
 
 [Install]
-WantedBy=getty.target
+WantedBy=display-manager.service
