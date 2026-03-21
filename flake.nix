@@ -43,7 +43,7 @@
           meta = with pkgs.lib; {
             description = "A program to block dgpu on Linux";
             homepage = "https://github.com/luytan/cardwire";
-            license = licenses.mit;
+            license = licenses.gpl3Only;
             mainProgram = "cardwire";
             platforms = platforms.linux;
           };
