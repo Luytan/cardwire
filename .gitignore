@@ -18,3 +18,4 @@ target
 
 # Nix build
 result
+.direnv
