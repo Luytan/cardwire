@@ -71,8 +71,7 @@ nix develop
 nix build
 
 # Build the vm and enter
-nix build .#nixosConfigurations.x86_64-linux.config.system.build.vm
-./result/bin/run-nixos-vm
+nix run .#nixosConfigurations.x86_64-linux.config.system.build.vm
 ```
 
 ### Manual Compilation
