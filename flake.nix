@@ -16,15 +16,33 @@
       flake-utils,
     }:
     let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
-      packagesPerSystem = flake-utils.lib.eachSystem supportedSystems (system: {
-        packages.default =
-          let
-            toolchain = fenix.packages.${system}.minimal.toolchain;
-            pkgs = nixpkgs.legacyPackages.${system};
-          in
-           pkgs.callPackage ./nix { inherit toolchain; };
-       });
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      packagesPerSystem = flake-utils.lib.eachSystem supportedSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          fenixPkgs = fenix.packages.${system};
+
+          toolchain = fenixPkgs.combine [
+            fenixPkgs.stable.cargo
+            fenixPkgs.stable.rustc
+            fenixPkgs.stable.rustfmt
+            fenixPkgs.stable.clippy
+            fenixPkgs.stable.rust-src
+          ];
+        in
+        {
+          packages.default = pkgs.callPackage ./nix { inherit toolchain; };
+          devShells.default = pkgs.mkShell {
+            packages = [ toolchain ];
+            RUST_SRC_PATH = "${fenixPkgs.stable.rust-src}/lib/rustlib/src/rust/library";
+            RUST_BACKTRACE = "1";
+          };
+        }
+      );
       nixosConfigurationsPerSystem = nixpkgs.lib.genAttrs supportedSystems (
         system:
         import ./nix/test-vm.nix {
