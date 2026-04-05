@@ -13,9 +13,38 @@ pub struct EbpfBlocker {
 }
 
 impl EbpfBlocker {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        Self::is_bpf_enabled()?;
+        let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
+            env!("OUT_DIR"),
+            "/bpf.o"
+        )))?;
+
+        let btf = Btf::from_sys_fs()?;
+
+        let program: &mut Lsm = ebpf
+            .program_mut("file_open")
+            .ok_or_else(|| Self::missing_entity("program", "file_open"))?
+            .try_into()?;
+        program.load("file_open", &btf)?;
+        program.attach()?;
+
+        Ok(Self { ebpf })
+    }
+
+    fn pci_key(pci: &str) -> [u8; 16] {
+        let mut key = [0u8; 16];
+        let bytes = pci.as_bytes();
+        let len = bytes.len().min(15);
+        key[..len].copy_from_slice(&bytes[..len]);
+        key[len] = 0;
+        key
+    }
+
     fn missing_entity(kind: &str, name: &str) -> IoError {
         IoError::new(ErrorKind::NotFound, format!("{} not found: {}", kind, name))
     }
+
     /*
         Checks if bpf/lsm is enabled in the kernel
      */
@@ -44,34 +73,6 @@ impl EbpfBlocker {
             true => return Ok(()),
             false => return Err(CardwireBPFError::LSMNotEnabled)
         }
-    }
-
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        Self::is_bpf_enabled()?;
-        let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
-            env!("OUT_DIR"),
-            "/bpf.o"
-        )))?;
-
-        let btf = Btf::from_sys_fs()?;
-
-        let program: &mut Lsm = ebpf
-            .program_mut("file_open")
-            .ok_or_else(|| Self::missing_entity("program", "file_open"))?
-            .try_into()?;
-        program.load("file_open", &btf)?;
-        program.attach()?;
-
-        Ok(Self { ebpf })
-    }
-
-    fn pci_key(pci: &str) -> [u8; 16] {
-        let mut key = [0u8; 16];
-        let bytes = pci.as_bytes();
-        let len = bytes.len().min(15);
-        key[..len].copy_from_slice(&bytes[..len]);
-        key[len] = 0;
-        key
     }
 
     /*
