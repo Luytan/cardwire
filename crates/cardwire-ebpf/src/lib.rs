@@ -74,26 +74,81 @@ impl EbpfBlocker {
         key
     }
 
-    pub fn block_id(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+    /*
+        This part is for blocking a specific CardID
+     */
+
+    pub fn block_card(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
         let mut map: HashMap<_, u32, u8> = HashMap::try_from(
             self.ebpf
-                .map_mut("BLOCKED_IDS")
-                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_IDS"))?,
+                .map_mut("BLOCKED_CARDID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_CARDID"))?,
         )?;
         map.insert(id, 1, 0)?;
         Ok(())
     }
 
-    pub fn unblock_id(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn unblock_card(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
         let mut map: HashMap<_, u32, u8> = HashMap::try_from(
             self.ebpf
-                .map_mut("BLOCKED_IDS")
-                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_IDS"))?,
+                .map_mut("BLOCKED_CARDID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_CARDID"))?,
         )?;
         let _ = map.remove(&id);
         Ok(())
     }
 
+    pub fn is_card_blocked(&self, id: u32) -> Result<bool, Box<dyn std::error::Error>> {
+        let map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map("BLOCKED_CARDID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_CARDID"))?,
+        )?;
+        match map.get(&id, 0) {
+            Ok(_) => Ok(true),
+            Err(MapError::KeyNotFound) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+    /*
+        This part is for blocking a specific RenderID
+     */
+
+    pub fn block_render(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let mut map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map_mut("BLOCKED_RENDERID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_RENDERID"))?,
+        )?;
+        map.insert(id, 1, 0)?;
+        Ok(())
+    }
+
+    pub fn unblock_render(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let mut map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map_mut("BLOCKED_RENDERID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_RENDERID"))?,
+        )?;
+        let _ = map.remove(&id);
+        Ok(())
+    }
+
+    pub fn is_render_blocked(&self, id: u32) -> Result<bool, Box<dyn std::error::Error>> {
+        let map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map("BLOCKED_RENDERID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_RENDERID"))?,
+        )?;
+        match map.get(&id, 0) {
+            Ok(_) => Ok(true),
+            Err(MapError::KeyNotFound) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+    /*
+        This part is for blocking a specific PCI
+     */
     pub fn block_pci(&mut self, pci: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut map: HashMap<_, [u8; 16], u8> = HashMap::try_from(
             self.ebpf
@@ -114,19 +169,6 @@ impl EbpfBlocker {
         let key = Self::pci_key(pci);
         let _ = map.remove(&key);
         Ok(())
-    }
-
-    pub fn is_id_blocked(&self, id: u32) -> Result<bool, Box<dyn std::error::Error>> {
-        let map: HashMap<_, u32, u8> = HashMap::try_from(
-            self.ebpf
-                .map("BLOCKED_IDS")
-                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_IDS"))?,
-        )?;
-        match map.get(&id, 0) {
-            Ok(_) => Ok(true),
-            Err(MapError::KeyNotFound) => Ok(false),
-            Err(err) => Err(err.into()),
-        }
     }
 
     pub fn is_pci_blocked(&self, pci: &str) -> Result<bool, Box<dyn std::error::Error>> {

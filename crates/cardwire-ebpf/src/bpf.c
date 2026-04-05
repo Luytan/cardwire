@@ -12,7 +12,14 @@ struct {
     __uint(max_entries, 1024);
     __type(key, u32);
     __type(value, u8);
-} BLOCKED_IDS SEC(".maps");
+} BLOCKED_RENDERID SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, u32);
+    __type(value, u8);
+} BLOCKED_CARDID SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -112,7 +119,7 @@ int BPF_PROG(file_open, struct file *file){
         if (bpf_core_read_str(filename, sizeof(filename), name_ptr) < 0){
             return 0;
         }
-
+        // CardID Check
         if (__builtin_memcmp(filename, "card", 4) == 0) {
             if (is_dev_dri(d) != 0) return 0;
             
@@ -131,10 +138,11 @@ int BPF_PROG(file_open, struct file *file){
                     break;
                 }
             }
-            if (is_match && bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
+            if (is_match && bpf_map_lookup_elem(&BLOCKED_CARDID, &id)) {
                 return -ENOENT;
             }
         } 
+        // RenderID Check
         else if (__builtin_memcmp(filename, "renderD", 7) == 0) {
             if (is_dev_dri(d) != 0) return 0;
             
@@ -153,10 +161,11 @@ int BPF_PROG(file_open, struct file *file){
                     break;
                 }
             }
-            if (is_match && bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
+            if (is_match && bpf_map_lookup_elem(&BLOCKED_RENDERID, &id)) {
                 return -ENOENT;
             }
         }
+        // Config Check via pci
         else if (__builtin_memcmp(filename, "config", 6) == 0) {
             char pci_addr[16] = {};
             if (get_pci_addr(d, pci_addr, sizeof(pci_addr)) != 0){
