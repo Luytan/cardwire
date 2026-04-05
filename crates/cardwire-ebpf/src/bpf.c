@@ -48,23 +48,28 @@ static __always_inline int is_dev_dri(struct dentry *dentry){
     
     if (!dentry) return 1;
 
-    // Check first parent ("dri")
+    // First parent must be "dri" (e.g., /dev/dri/card0)
     parent = BPF_CORE_READ(dentry, d_parent);
     if (!parent) return 1;
     q = BPF_CORE_READ(parent, d_name);
     if (!qstr_eq(q, "dri", 3)) return 1;
 
-    // Check second parent ("dev")
+    // Check for the next parent in the path hierarchy.
     parent = BPF_CORE_READ(parent, d_parent);
     if (!parent) return 1;
     q = BPF_CORE_READ(parent, d_name);
-    if (!qstr_eq(q, "dev", 3)) return 1;
-
-    // Check last parent ("/")
-    parent = BPF_CORE_READ(parent, d_parent);
-    if (!parent) return 1;
-    q = BPF_CORE_READ(parent, d_name);
-    if (!qstr_eq(q, "/", 1)) return 1;
+    
+    if (qstr_eq(q, "dev", 3)) {
+        // If the parent was 'dev', the next parent must be the root '/'.
+        parent = BPF_CORE_READ(parent, d_parent);
+        if (!parent) return 1;
+        q = BPF_CORE_READ(parent, d_name);
+        if (!qstr_eq(q, "/", 1)) return 1;
+    } else if (qstr_eq(q, "/", 1)) {
+        // Parent is already '/', which means 'dri' is at the root of its fs
+    } else {
+        return 1;
+    }
 
     return 0;
 }
@@ -113,6 +118,7 @@ int BPF_PROG(file_open, struct file *file){
             
             u32 id = 0;
             int i = 4;
+            int is_match = 0;
             #pragma unroll
             for (int j = 0; j < 9; j++){
                 if (i >= sizeof(filename)) break;
@@ -120,11 +126,12 @@ int BPF_PROG(file_open, struct file *file){
                 if (c >= '0' && c <= '9') {
                     id = id * 10 + (c - '0');
                     i++;
+                    is_match = 1;
                 } else {
                     break;
                 }
             }
-            if (bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
+            if (is_match && bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
                 return -ENOENT;
             }
         } 
@@ -133,6 +140,7 @@ int BPF_PROG(file_open, struct file *file){
             
             u32 id = 0;
             int i = 7;
+            int is_match = 0;
             #pragma unroll
             for (int j = 0; j < 9; j++){
                 if (i >= sizeof(filename)) break;
@@ -140,11 +148,12 @@ int BPF_PROG(file_open, struct file *file){
                 if (c >= '0' && c <= '9'){
                     id = id * 10 + (c - '0');
                     i++;
+                    is_match = 1;
                 } else {
                     break;
                 }
             }
-            if (bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
+            if (is_match && bpf_map_lookup_elem(&BLOCKED_IDS, &id)) {
                 return -ENOENT;
             }
         }
