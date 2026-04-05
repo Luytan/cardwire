@@ -5,7 +5,7 @@ use zbus::{fdo, interface};
 use crate::config::Config;
 use crate::models::{Daemon, Modes};
 use cardwire_core::gpu::{GpuRow, block_gpu, is_gpu_blocked};
-#[interface(name = "com.cardwire.daemon")]
+#[interface(name = "com.github.luytan.cardwire")]
 impl Daemon {
     pub(crate) async fn set_mode(&self, mode: String) -> fdo::Result<String> {
         let mode = match mode.to_ascii_lowercase().as_str() {
@@ -77,7 +77,10 @@ impl Daemon {
 
         // prevent default gpu from being blocked
         if gpu.is_default() {
-            warn!("Cannot set block state for GPU {}: device is marked as default", gpu_id);
+            warn!(
+                "Cannot set block state for GPU {}: device is marked as default",
+                gpu_id
+            );
             return Err(fdo::Error::AccessDenied(format!(
                 "GPU {} is the default device and cannot be blocked",
                 gpu_id
@@ -86,14 +89,8 @@ impl Daemon {
 
         let mut blocker = self.state.ebpf_blocker.write().await;
         block_gpu(&mut blocker, gpu, block).map_err(|err| fdo::Error::Failed(err.to_string()))?;
-        
 
-        info!(
-            "Set GPU {} ({}) block={}",
-            gpu_id,
-            gpu.pci_address(),
-            block
-        );
+        info!("Set GPU {} ({}) block={}", gpu_id, gpu.pci_address(), block);
 
         Ok(format!(
             "GPU {} block {}",
@@ -107,7 +104,8 @@ impl Daemon {
         let mut rows = Vec::with_capacity(self.state.gpu_list.len());
         let blocker = self.state.ebpf_blocker.read().await;
         for gpu in self.state.gpu_list.values() {
-            let blocked: bool = is_gpu_blocked(&blocker, gpu).expect("Couldn't check gpu's lock state");
+            let blocked: bool =
+                is_gpu_blocked(&blocker, gpu).expect("Couldn't check gpu's lock state");
             rows.push((
                 gpu.id() as u32,
                 gpu.name().to_string(),

@@ -3,8 +3,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use crate::iommu::Device;
 use crate::gpu::models::Gpu;
+use crate::iommu::Device;
 
 pub fn read_gpu(pci_devices: &HashMap<String, Device>) -> io::Result<HashMap<usize, Gpu>> {
     let mut gpus: Vec<Gpu> = pci_devices
@@ -14,14 +14,15 @@ pub fn read_gpu(pci_devices: &HashMap<String, Device>) -> io::Result<HashMap<usi
         .collect::<io::Result<Vec<_>>>()?;
 
     // Default GPU gets ID 0, rest ordered by PCI address
-    gpus.sort_by(|a, b| {
-        b.default.cmp(&a.default).then(a.pci.cmp(&b.pci))
-    });
+    gpus.sort_by(|a, b| b.default.cmp(&a.default).then(a.pci.cmp(&b.pci)));
 
     Ok(gpus
         .into_iter()
         .enumerate()
-        .map(|(id, mut gpu)| { gpu.id = id as u32; (id, gpu) })
+        .map(|(id, mut gpu)| {
+            gpu.id = id as u32;
+            (id, gpu)
+        })
         .collect())
 }
 
@@ -43,8 +44,5 @@ fn build_gpu(device: &Device) -> io::Result<Gpu> {
 
 fn drm_node_path(pci_address: &str, node_kind: &str) -> io::Result<String> {
     let by_path = format!("/dev/dri/by-path/pci-{pci_address}-{node_kind}");
-    Ok(fs::canonicalize(by_path)?
-        .to_string_lossy()
-        .into_owned())
+    Ok(fs::canonicalize(by_path)?.to_string_lossy().into_owned())
 }
-

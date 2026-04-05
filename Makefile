@@ -18,7 +18,7 @@ BIN_CLI := cardwire
 # Asset files
 SERVICE_NAME := cardwired.service
 SERVICE_FILE := /usr/lib/systemd/system/$(SERVICE_NAME)
-DBUS_CONFIG := /usr/share/dbus-1/system.d/com.cardwire.daemon.conf
+DBUS_CONFIG := /usr/share/dbus-1/system.d/com.github.luytan.cardwire.conf
 
 # Build targets
 TARGET_DAEMON := target/$(TARGET_DIR)/$(BIN_DAEMON)
@@ -48,7 +48,7 @@ install:
 	@echo "Installing systemd service..."
 	$(INSTALL_DATA) "assets/cardwired.service" "$(DESTDIR)$(SERVICE_FILE)"
 	@echo "Installing D-Bus config..."
-	$(INSTALL_DATA) "assets/com.cardwire.daemon.conf" "$(DESTDIR)$(DBUS_CONFIG)"
+	$(INSTALL_DATA) "assets/com.github.luytan.cardwire.conf" "$(DESTDIR)$(DBUS_CONFIG)"
 ifeq ($(DESTDIR),)
 	@echo "Reloading systemd daemon..."
 	systemctl daemon-reload

@@ -32,7 +32,6 @@ impl Gpu {
     pub fn card_node(&self) -> &str {
         &self.card
     }
-
 }
 
 // GpuRow for display

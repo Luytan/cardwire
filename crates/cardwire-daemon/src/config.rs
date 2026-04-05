@@ -1,10 +1,10 @@
+use crate::models::Modes;
+use log::warn;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::path::Path;
 use tokio::fs;
-use crate::models::Modes;
-use serde::{Deserialize, Serialize};
-use log::warn;
 use toml;
-use std::error::Error;
 
 pub const CONFIG_PATH: &str = "/etc/cardwire.toml";
 
@@ -20,19 +20,31 @@ impl Config {
             Ok(content) => match toml::from_str(&content) {
                 Ok(config) => config,
                 Err(err) => {
-                    warn!("Invalid config file at {}: {}. Recreating default config.", CONFIG_PATH, err);
+                    warn!(
+                        "Invalid config file at {}: {}. Recreating default config.",
+                        CONFIG_PATH, err
+                    );
                     let config = Config::default();
                     if let Err(save_err) = config.save_mode_to_config() {
-                        warn!("Failed to save default config to {}: {}", CONFIG_PATH, save_err);
+                        warn!(
+                            "Failed to save default config to {}: {}",
+                            CONFIG_PATH, save_err
+                        );
                     }
                     config
                 }
             },
             Err(err) => {
-                warn!("Could not read config at {}: {}. Creating default config.", CONFIG_PATH, err);
+                warn!(
+                    "Could not read config at {}: {}. Creating default config.",
+                    CONFIG_PATH, err
+                );
                 let config = Config::default();
                 if let Err(save_err) = config.save_mode_to_config() {
-                    warn!("Failed to save default config to {}: {}", CONFIG_PATH, save_err);
+                    warn!(
+                        "Failed to save default config to {}: {}",
+                        CONFIG_PATH, save_err
+                    );
                 }
                 config
             }

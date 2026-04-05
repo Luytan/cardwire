@@ -1,12 +1,11 @@
 [Unit]
 Description=Cardwire Daemon
 Before=graphical.target
-Before=display-manager.service
 
 
 [Service]
 Type=dbus
-BusName=com.cardwire.daemon
+BusName=com.github.luytan.cardwire
 ExecStart=/usr/bin/cardwired
 Restart=on-failure
 RestartSec=5s

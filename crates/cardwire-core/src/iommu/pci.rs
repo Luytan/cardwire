@@ -5,8 +5,8 @@ use std::io;
 use std::io::BufRead;
 use std::path::Path;
 
-use super::groups::read_iommu_groups;
 use super::errors::IommuError;
+use super::groups::read_iommu_groups;
 
 #[derive(Clone)]
 pub struct Device {

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::io;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

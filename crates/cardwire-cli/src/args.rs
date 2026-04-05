@@ -9,7 +9,9 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    Set { mode: String },
+    Set {
+        mode: String,
+    },
     Get,
     List,
     Gpu {
