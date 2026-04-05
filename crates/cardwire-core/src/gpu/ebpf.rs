@@ -19,11 +19,13 @@ pub fn block_gpu(blocker: &mut EbpfBlocker, gpu: &Gpu, block: bool) -> Result<()
     if block {
         blocker.block_card(card_id)?;
         blocker.block_render(render_id)?;
-        blocker.block_pci(gpu.pci_address())
+        blocker.block_pci(gpu.pci_address())?;
+        Ok(())
     } else {
         blocker.unblock_card(card_id)?;
         blocker.unblock_render(render_id)?;
-        blocker.unblock_pci(gpu.pci_address())
+        blocker.unblock_pci(gpu.pci_address())?;
+        Ok(())
     }
 }
 
