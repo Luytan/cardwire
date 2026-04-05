@@ -1,4 +1,5 @@
-#include "vmlinux.h"
+#include <linux/bpf.h>
+#include <linux/types.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -7,29 +8,55 @@ char __license[] SEC("license") = "GPL";
 
 #define ENOENT 2
 
+// kernel type definitions
+struct qstr {
+    union {
+        struct {
+            __u32 hash;
+            __u32 len;
+        };
+        __u64 hash_len;
+    };
+    const unsigned char *name;
+} __attribute__((preserve_access_index));
+
+struct dentry {
+    struct qstr d_name;
+    struct dentry *d_parent;
+} __attribute__((preserve_access_index));
+
+struct path {
+    struct dentry *dentry;
+} __attribute__((preserve_access_index));
+
+struct file {
+    struct path f_path;
+} __attribute__((preserve_access_index));
+
+// EBPF maps
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 1024);
-	__type(key, u32);
-	__type(value, u8);
+	__type(key, __u32);
+	__type(value, __u8);
 } BLOCKED_RENDERID SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 1024);
-	__type(key, u32);
-	__type(value, u8);
+	__type(key, __u32);
+	__type(value, __u8);
 } BLOCKED_CARDID SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 1024);
 	__type(key, char[16]);
-	__type(value, u8);
+	__type(value, __u8);
 } BLOCKED_PCI SEC(".maps");
 
 /* Safely read and compare kernel qstr, may be useless */
-static __always_inline int qstr_eq(struct qstr q, const char *name, u32 len)
+static __always_inline int qstr_eq(struct qstr q, const char *name, __u32 len)
 {
 	if (!q.name || q.len != len) {
 		return 0;
@@ -140,7 +167,7 @@ int BPF_PROG(file_open, struct file *file)
 			if (is_dev_dri(d) != 0)
 				return 0;
 
-			u32 id = 0;
+			__u32 id = 0;
 			int i = 4;
 			int is_match = 0;
 #pragma unroll
@@ -166,7 +193,7 @@ int BPF_PROG(file_open, struct file *file)
 			if (is_dev_dri(d) != 0)
 				return 0;
 
-			u32 id = 0;
+			__u32 id = 0;
 			int i = 7;
 			int is_match = 0;
 #pragma unroll
