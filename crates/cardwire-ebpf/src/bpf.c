@@ -221,10 +221,10 @@ int BPF_PROG(file_open, struct file *file)
 				return -ENOENT;
 			}
 		}
-				// NVIDIA Check
+		// NVIDIA Check
 		else if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
 			__u32 id = 0;
-			int i = 7;
+			int i = 6;
 			int is_match = 0;
 #pragma unroll
 			for (int j = 0; j < 9; j++) {
