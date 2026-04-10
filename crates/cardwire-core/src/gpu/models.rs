@@ -6,6 +6,8 @@ pub struct Gpu {
     pub render: String,
     pub card: String,
     pub default: bool,
+    pub nvidia: bool,
+    pub nvidia_minor: u32,
 }
 
 impl Gpu {
@@ -31,6 +33,12 @@ impl Gpu {
 
     pub fn card_node(&self) -> &str {
         &self.card
+    }
+    pub fn is_nvidia(&self) -> &bool {
+        &self.nvidia
+    }
+    pub fn nvidia_minor(&self) -> &u32 {
+        &self.nvidia_minor
     }
 }
 

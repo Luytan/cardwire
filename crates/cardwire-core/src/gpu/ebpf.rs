@@ -10,7 +10,12 @@ pub fn is_gpu_blocked(
     let (card_id, render_id) = gpu_node_ids(gpu)?;
     Ok(blocker.is_pci_blocked(gpu.pci_address())?
         && blocker.is_card_blocked(card_id)?
-        && blocker.is_render_blocked(render_id)?)
+        && blocker.is_render_blocked(render_id)?
+        && if gpu.nvidia {
+            blocker.is_nvidia_blocked(*gpu.nvidia_minor())?
+        } else {
+            true
+        })
 }
 
 pub fn block_gpu(
@@ -24,11 +29,17 @@ pub fn block_gpu(
         blocker.block_card(card_id)?;
         blocker.block_render(render_id)?;
         blocker.block_pci(gpu.pci_address())?;
+        if gpu.nvidia == true {
+            blocker.block_nvidia(*gpu.nvidia_minor())?
+        }
         Ok(())
     } else {
         blocker.unblock_card(card_id)?;
         blocker.unblock_render(render_id)?;
         blocker.unblock_pci(gpu.pci_address())?;
+        if gpu.nvidia == true {
+            blocker.unblock_nvidia(*gpu.nvidia_minor())?
+        }
         Ok(())
     }
 }

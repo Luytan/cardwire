@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
+use std::path::Path;
 
 use crate::gpu::models::Gpu;
 use crate::iommu::Device;
@@ -29,6 +30,13 @@ pub fn read_gpu(pci_devices: &HashMap<String, Device>) -> io::Result<HashMap<usi
 }
 
 fn build_gpu(device: &Device) -> io::Result<Gpu> {
+    let nvidia: bool = device.vendor_id == "0x10de";
+    let nvidia_minor: u32 = if nvidia {
+        nvidia_get_minor(&device.pci_address).unwrap_or(99)
+    } else {
+        99
+    };
+
     Ok(Gpu {
         id: 0, // reassigned after sorting
         name: device.device_name.clone(),
@@ -36,12 +44,28 @@ fn build_gpu(device: &Device) -> io::Result<Gpu> {
         render: drm_node_path(&device.pci_address, "render")?,
         card: drm_node_path(&device.pci_address, "card")?,
         default: check_default(&device.pci_address)?,
+        nvidia,
+        nvidia_minor,
     })
 }
 
 fn drm_node_path(pci_address: &str, node_kind: &str) -> io::Result<String> {
     let by_path = format!("/dev/dri/by-path/pci-{pci_address}-{node_kind}");
     Ok(fs::canonicalize(by_path)?.to_string_lossy().into_owned())
+}
+fn nvidia_get_minor(pci_address: &str) -> Option<u32> {
+    let nvidia_driver_proc = Path::new("/proc/driver/nvidia/gpus/")
+        .join(pci_address)
+        .join("information");
+    let information = fs::read_to_string(nvidia_driver_proc).ok()?;
+    information
+        .lines()
+        .find(|line| line.starts_with("Device Minor:"))?
+        .split_once(':')?
+        .1
+        .trim()
+        .parse::<u32>()
+        .ok()
 }
 fn check_default(pci_address: &str) -> io::Result<bool> {
     let fb0_path = format!("/sys/class/graphics/fb0");

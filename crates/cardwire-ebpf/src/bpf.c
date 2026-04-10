@@ -46,6 +46,13 @@ struct {
 	__uint(max_entries, 1024);
 	__type(key, __u32);
 	__type(value, __u8);
+} BLOCKED_NVIDIAID SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 1024);
+	__type(key, __u32);
+	__type(value, __u8);
 } BLOCKED_CARDID SEC(".maps");
 
 struct {
@@ -211,6 +218,29 @@ int BPF_PROG(file_open, struct file *file)
 			}
 			if (is_match &&
 			    bpf_map_lookup_elem(&BLOCKED_RENDERID, &id)) {
+				return -ENOENT;
+			}
+		}
+		// NVIDIA Check
+		else if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
+			__u32 id = 0;
+			int i = 6;
+			int is_match = 0;
+#pragma unroll
+			for (int j = 0; j < 9; j++) {
+				if (i >= sizeof(filename))
+					break;
+				char c = filename[i];
+				if (c >= '0' && c <= '9') {
+					id = id * 10 + (c - '0');
+					i++;
+					is_match = 1;
+				} else {
+					break;
+				}
+			}
+			if (is_match &&
+			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
 				return -ENOENT;
 			}
 		}
