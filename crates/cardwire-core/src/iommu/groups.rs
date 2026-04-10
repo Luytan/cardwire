@@ -52,7 +52,10 @@ fn read_group_devices(group_dir: &Path) -> Result<Vec<String>, IommuError> {
         let Ok(name_str) = device_entry.file_name().into_string() else {
             continue;
         };
-        devices.push(name_str);
+        // Skip non-PCI devices like ACPI entries (e.g. MSFT0201:00)
+        if name_str.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+          devices.push(name_str);
+        }
     }
 
     Ok(devices)

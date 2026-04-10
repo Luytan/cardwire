@@ -37,6 +37,8 @@ in
         Type = "dbus";
         BusName = "com.github.luytan.cardwire";
         ExecStart = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/cardwired";
+        StateDirectory = "cardwire";
+        StateDirectoryMode = "0755";
       };
       wantedBy = [ "default.target" ];
     };

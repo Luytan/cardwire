@@ -11,13 +11,12 @@ pub fn read_gpu(pci_devices: &HashMap<String, Device>) -> io::Result<HashMap<usi
         .values()
         .filter(|device| {
             device.class.as_str() == "0x030000" || // VGA compatible controller
-            device.class.as_str() == "0x380000"})  // Display controller
-        .map(|device| build_gpu(device))
-        .collect::<io::Result<Vec<_>>>()?;
+            device.class.as_str() == "0x038000"    // Display controller (AMD iGPU)
+        })
+        .filter_map(|device| build_gpu(device).ok())
+        .collect();
 
-    // Default GPU gets ID 0, rest ordered by PCI address
     gpus.sort_by(|a, b| b.default.cmp(&a.default).then(a.pci.cmp(&b.pci)));
-
     Ok(gpus
         .into_iter()
         .enumerate()
@@ -32,23 +31,26 @@ fn build_gpu(device: &Device) -> io::Result<Gpu> {
     let boot_vga_path = Path::new("/sys/bus/pci/devices")
         .join(&device.pci_address)
         .join("boot_vga");
-    let is_default = fs::read_to_string(boot_vga_path)?.trim() == "1";
+    // Display controllers may not have boot_vga, default to false
+    let is_default = fs::read_to_string(boot_vga_path)
+        .map(|s| s.trim() == "1")
+        .unwrap_or(false);
+
     let nvidia: bool = &device.vendor_id == "0x10de";
     let nvidia_minor: u32 = if nvidia {
         nvidia_get_minor(&device.pci_address).unwrap_or(99)
     } else {
         99
     };
-
     Ok(Gpu {
-        id: 0, // reassigned after sorting
+        id: 0,
         name: device.device_name.clone(),
         pci: device.pci_address.clone(),
-        render: drm_node_path(&device.pci_address, "render")?,
-        card: drm_node_path(&device.pci_address, "card")?,
+        render: drm_node_path(&device.pci_address, "render").unwrap_or_default(),
+        card: drm_node_path(&device.pci_address, "card").unwrap_or_default(),
         default: is_default,
-        nvidia: nvidia,
-        nvidia_minor: nvidia_minor,
+        nvidia,
+        nvidia_minor,
     })
 }
 
