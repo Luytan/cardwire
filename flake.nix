@@ -33,6 +33,10 @@
     {
       packages = forAllSystems (system: {
         default = (pkgs system).callPackage ./nix { toolchain = toolchainFor system; };
+        vm-test = import ./nix/integration-test.nix {
+          inherit pkgs system self;
+          lib = nixpkgs.lib;
+        };
       });
       formatter = forAllSystems (
         system:
@@ -57,10 +61,6 @@
           RUST_SRC_PATH = "${(fenixpkgs system).stable.rust-src}/lib/rustlib/src/rust/library";
           RUST_BACKTRACE = "1";
           inherit (self.checks.${system}.pre-commit-check) shellHook;
-        };
-        vm-test = import ./nix/integration-test.nix {
-          inherit pkgs system self;
-          lib = nixpkgs.lib;
         };
       });
       nixosModules.default = import ./nix/nixos-module.nix self;
