@@ -50,8 +50,8 @@ impl Daemon {
         if let Err(err) = current_config.save_mode_to_config() {
             warn!("Failed to save mode to config: {}", err);
         }
-        info!("Switched to {}", mode.to_string());
-        Ok(format!("Set mode to {}", mode.to_string()))
+        info!("Switched to {}", mode);
+        Ok(format!("Set mode to {}", mode))
     }
 
     pub(crate) async fn get_mode(&self) -> String {
@@ -61,10 +61,10 @@ impl Daemon {
 
         format!(
             "Available modes: {} {} {}\nCurrent Mode: {}",
-            Modes::Integrated.to_string(),
-            Modes::Hybrid.to_string(),
-            Modes::Manual.to_string(),
-            current.to_string()
+            Modes::Integrated,
+            Modes::Hybrid,
+            Modes::Manual,
+            current
         )
     }
 
@@ -107,7 +107,7 @@ impl Daemon {
             let blocked: bool =
                 is_gpu_blocked(&blocker, gpu).expect("Couldn't check gpu's lock state");
             rows.push((
-                gpu.id() as u32,
+                gpu.id(),
                 gpu.name().to_string(),
                 gpu.pci_address().to_string(),
                 gpu.render_node().to_string(),

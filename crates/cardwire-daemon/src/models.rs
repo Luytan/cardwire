@@ -43,13 +43,13 @@ impl Daemon {
             Modes::Integrated | Modes::Hybrid => {
                 let block = config.mode == Modes::Integrated;
                 for gpu in gpu_list.values() {
-                    if !gpu.is_default() {
-                        if let Err(err) = block_gpu(&mut ebpf_blocker, gpu, block) {
-                            warn!(
-                                "Failed to apply config mode {} at startup: {}",
-                                config.mode, err
-                            );
-                        }
+                    if !gpu.is_default()
+                        && let Err(err) = block_gpu(&mut ebpf_blocker, gpu, block)
+                    {
+                        warn!(
+                            "Failed to apply config mode {} at startup: {}",
+                            config.mode, err
+                        );
                     }
                 }
             }

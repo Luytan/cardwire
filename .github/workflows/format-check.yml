@@ -1,0 +1,12 @@
+name: format-check
+on:
+  pull_request:
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - name: Check code format
+        run: nix build -L .#checks.x86_64-linux.pre-commit-check

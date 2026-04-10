@@ -70,8 +70,8 @@ impl EbpfBlocker {
         gz.read_to_string(&mut config)?;
 
         match config.contains("CONFIG_BPF_LSM=y") {
-            true => return Ok(()),
-            false => return Err(CardwireBPFError::LSMNotEnabled),
+            true => Ok(()),
+            false => Err(CardwireBPFError::LSMNotEnabled),
         }
     }
 
@@ -140,6 +140,42 @@ impl EbpfBlocker {
             self.ebpf
                 .map("BLOCKED_RENDERID")
                 .ok_or_else(|| Self::missing_entity("map", "BLOCKED_RENDERID"))?,
+        )?;
+        match map.get(&id, 0) {
+            Ok(_) => Ok(true),
+            Err(MapError::KeyNotFound) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
+    }
+    /*
+       This part is for blocking a specific NvidiaID
+    */
+
+    pub fn block_nvidia(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let mut map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map_mut("BLOCKED_NVIDIAID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_NVIDIAID"))?,
+        )?;
+        map.insert(id, 1, 0)?;
+        Ok(())
+    }
+
+    pub fn unblock_nvidia(&mut self, id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let mut map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map_mut("BLOCKED_NVIDIAID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_NVIDIAID"))?,
+        )?;
+        let _ = map.remove(&id);
+        Ok(())
+    }
+
+    pub fn is_nvidia_blocked(&self, id: u32) -> Result<bool, Box<dyn std::error::Error>> {
+        let map: HashMap<_, u32, u8> = HashMap::try_from(
+            self.ebpf
+                .map("BLOCKED_NVIDIAID")
+                .ok_or_else(|| Self::missing_entity("map", "BLOCKED_NVIDIAID"))?,
         )?;
         match map.get(&id, 0) {
             Ok(_) => Ok(true),

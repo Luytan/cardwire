@@ -55,10 +55,10 @@ cardwire gpu 1 info
 
 ## Configuration
 
-The daemon reads its configuration from `/etc/cardwire.toml`. If the file is missing, it defaults to `Manual` mode. (Config parsing not tested yet)
+The daemon reads its configuration from `/var/lib/cardwire/cardwire.toml`. If the file is missing, it defaults to `Manual` mode. (Config parsing not tested yet)
 
 ```toml
-# /etc/cardwire.toml
+# /var/lib/cardwire/cardwire.toml
 mode = "Manual"
 ```
 
@@ -72,6 +72,12 @@ nix develop
 
 # Build the project
 nix build
+
+# Run formatting checks
+nix build .#checks.x86_64-linux.pre-commit-check
+
+# Run integration tests in VM
+nix build .#checks.x86_64-linux.vm-test
 
 # Build the vm and enter
 nix run .#nixosConfigurations.x86_64-linux.config.system.build.vm

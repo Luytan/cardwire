@@ -35,8 +35,9 @@ build:
 
 check:
 	$(CARGO) check --release
-	$(CARGO) clippy --release -- -D warnings
-
+	$(CARGO) clippy --all-targets --all-features -- -D warnings
+format:
+	$(CARGO) fmt
 #=============================================================================
 # Installation targets
 #=============================================================================
