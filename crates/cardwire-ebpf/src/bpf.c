@@ -9,6 +9,20 @@ char __license[] SEC("license") = "GPL";
 #define ENOENT 2
 
 // kernel type definitions
+
+// For inode
+struct hlist_node {
+	struct hlist_node *next, **pprev;
+} __attribute__((preserve_access_index));
+
+struct hlist_head {
+	struct hlist_node *first;
+} __attribute__((preserve_access_index));
+
+struct inode {
+	struct hlist_head i_dentry;
+} __attribute__((preserve_access_index));
+
 struct qstr {
 	union {
 		struct {
@@ -23,6 +37,9 @@ struct qstr {
 struct dentry {
 	struct qstr d_name;
 	struct dentry *d_parent;
+	union {
+		struct hlist_node d_alias;
+	} d_u;
 } __attribute__((preserve_access_index));
 
 struct path {
@@ -153,6 +170,10 @@ static __always_inline int get_pci_addr(struct dentry *dentry, char *pci_addr,
 	return 1;
 }
 
+/*
+	LSM to prevent open on DRM
+*/
+
 SEC("lsm/file_open")
 int BPF_PROG(file_open, struct file *file)
 {
@@ -255,6 +276,107 @@ int BPF_PROG(file_open, struct file *file)
 			pci_addr[12] = '\0';
 
 			if (bpf_map_lookup_elem(&BLOCKED_PCI, pci_addr)) {
+				return -ENOENT;
+			}
+		}
+	}
+	return 0;
+}
+/*
+	To prevent flatpak from crashing
+*/
+SEC("lsm/inode_permission")
+int BPF_PROG(inode_permission, struct inode *inode, int mask)
+{
+	char filename[16] = {};
+	const unsigned char *name_ptr = NULL;
+	/*
+		I do not understand this part but it works
+	*/
+	struct hlist_node *first = BPF_CORE_READ(inode, i_dentry.first);
+	if (!first) {
+		return 0;
+	}
+
+	unsigned long offset =
+		bpf_core_field_offset(struct dentry, d_u.d_alias);
+	struct dentry *d = (struct dentry *)((void *)first - offset);
+	//
+
+	if (d) {
+		name_ptr = BPF_CORE_READ(d, d_name.name);
+	}
+
+	if (name_ptr) {
+		if (bpf_core_read_str(filename, sizeof(filename), name_ptr) <
+		    0) {
+			return 0;
+		}
+		// NVIDIA Check
+		if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
+			__u32 id = 0;
+			int i = 6;
+			int is_match = 0;
+#pragma unroll
+			for (int j = 0; j < 9; j++) {
+				if (i >= sizeof(filename))
+					break;
+				char c = filename[i];
+				if (c >= '0' && c <= '9') {
+					id = id * 10 + (c - '0');
+					i++;
+					is_match = 1;
+				} else {
+					break;
+				}
+			}
+			if (is_match &&
+			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
+				return -ENOENT;
+			}
+		}
+	}
+	return 0;
+}
+/*
+	To prevent flatpak from crashing, 
+*/
+SEC("lsm/inode_getattr")
+int BPF_PROG(inode_getattr, const struct path *path)
+{
+	char filename[16] = {};
+	struct dentry *d = BPF_CORE_READ(path, dentry);
+	const unsigned char *name_ptr = NULL;
+
+	if (d) {
+		name_ptr = BPF_CORE_READ(d, d_name.name);
+	}
+
+	if (name_ptr) {
+		if (bpf_core_read_str(filename, sizeof(filename), name_ptr) <
+		    0) {
+			return 0;
+		}
+		// NVIDIA Check
+		if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
+			__u32 id = 0;
+			int i = 6;
+			int is_match = 0;
+#pragma unroll
+			for (int j = 0; j < 9; j++) {
+				if (i >= sizeof(filename))
+					break;
+				char c = filename[i];
+				if (c >= '0' && c <= '9') {
+					id = id * 10 + (c - '0');
+					i++;
+					is_match = 1;
+				} else {
+					break;
+				}
+			}
+			if (is_match &&
+			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
 				return -ENOENT;
 			}
 		}

@@ -22,12 +22,29 @@ impl EbpfBlocker {
 
         let btf = Btf::from_sys_fs()?;
 
-        let program: &mut Lsm = ebpf
+        // For lsm/file_open
+        let program_file_open: &mut Lsm = ebpf
             .program_mut("file_open")
             .ok_or_else(|| Self::missing_entity("program", "file_open"))?
             .try_into()?;
-        program.load("file_open", &btf)?;
-        program.attach()?;
+        program_file_open.load("file_open", &btf)?;
+        program_file_open.attach()?;
+
+        // For lsm/inode_permission
+        let program_inode_permission: &mut Lsm = ebpf
+            .program_mut("inode_permission")
+            .ok_or_else(|| Self::missing_entity("program", "inode_permission"))?
+            .try_into()?;
+        program_inode_permission.load("inode_permission", &btf)?;
+        program_inode_permission.attach()?;
+
+        // For lsm/inode_getattr
+        let program_inode_getattr: &mut Lsm = ebpf
+            .program_mut("inode_getattr")
+            .ok_or_else(|| Self::missing_entity("program", "inode_getattr"))?
+            .try_into()?;
+        program_inode_getattr.load("inode_getattr", &btf)?;
+        program_inode_getattr.attach()?;
 
         Ok(Self { ebpf })
     }
