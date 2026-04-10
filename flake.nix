@@ -33,10 +33,6 @@
     {
       packages = forAllSystems (system: {
         default = (pkgs system).callPackage ./nix { toolchain = toolchainFor system; };
-        vm-test = import ./nix/integration-test.nix {
-          inherit pkgs system self;
-          lib = nixpkgs.lib;
-        };
       });
       formatter = forAllSystems (
         system:
@@ -71,6 +67,10 @@
         }
       );
       checks = forAllSystems (system: {
+        vm-test = import ./nix/integration-test.nix {
+          inherit pkgs system self;
+          lib = nixpkgs.lib;
+        };
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
