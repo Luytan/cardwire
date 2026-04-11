@@ -32,8 +32,4 @@ impl<'a> DaemonClient<'a> {
     pub async fn set_gpu_block(&self, id: u32, blocked: bool) -> zbus::Result<String> {
         self.proxy.call("SetGpuBlock", &(id, blocked)).await
     }
-
-    pub async fn get_gpu_info(&self) -> zbus::Result<String> {
-        self.proxy.call("GetGpuInfo", &()).await
-    }
 }
