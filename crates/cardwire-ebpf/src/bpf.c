@@ -170,6 +170,112 @@ static __always_inline int get_pci_addr(struct dentry *dentry, char *pci_addr,
 	return 1;
 }
 
+static __always_inline int is_blocked_device(struct dentry *d)
+{
+	char filename[16] = {};
+	const unsigned char *name_ptr = NULL;
+
+	if (d) {
+		name_ptr = BPF_CORE_READ(d, d_name.name);
+	}
+
+	if (!name_ptr)
+		return 0;
+
+	if (bpf_core_read_str(filename, sizeof(filename), name_ptr) < 0) {
+		return 0;
+	}
+
+	// CardID Check
+	if (__builtin_memcmp(filename, "card", 4) == 0) {
+		if (is_dev_dri(d) != 0)
+			return 0;
+
+		__u32 id = 0;
+		int i = 4;
+		int is_match = 0;
+#pragma unroll
+		for (int j = 0; j < 9; j++) {
+			if (i >= sizeof(filename))
+				break;
+			char c = filename[i];
+			if (c >= '0' && c <= '9') {
+				id = id * 10 + (c - '0');
+				i++;
+				is_match = 1;
+			} else {
+				break;
+			}
+		}
+		if (is_match && bpf_map_lookup_elem(&BLOCKED_CARDID, &id)) {
+			return -ENOENT;
+		}
+	}
+	// RenderID Check
+	else if (__builtin_memcmp(filename, "renderD", 7) == 0) {
+		if (is_dev_dri(d) != 0)
+			return 0;
+
+		__u32 id = 0;
+		int i = 7;
+		int is_match = 0;
+#pragma unroll
+		for (int j = 0; j < 9; j++) {
+			if (i >= sizeof(filename))
+				break;
+			char c = filename[i];
+			if (c >= '0' && c <= '9') {
+				id = id * 10 + (c - '0');
+				i++;
+				is_match = 1;
+			} else {
+				break;
+			}
+		}
+		if (is_match && bpf_map_lookup_elem(&BLOCKED_RENDERID, &id)) {
+			return -ENOENT;
+		}
+	}
+	// NVIDIA Check
+	else if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
+		__u32 id = 0;
+		int i = 6;
+		int is_match = 0;
+#pragma unroll
+		for (int j = 0; j < 9; j++) {
+			if (i >= sizeof(filename))
+				break;
+			char c = filename[i];
+			if (c >= '0' && c <= '9') {
+				id = id * 10 + (c - '0');
+				i++;
+				is_match = 1;
+			} else {
+				break;
+			}
+		}
+		if (is_match && bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
+			return -ENOENT;
+		}
+	}
+	// Config Check via pci
+	else if (__builtin_memcmp(filename, "config", 6) == 0) {
+		char pci_addr[16] = {};
+		if (get_pci_addr(d, pci_addr, sizeof(pci_addr)) != 0) {
+			return 0;
+		}
+
+		pci_addr[11] = '0';
+		pci_addr[12] = '\0';
+
+		if (bpf_map_lookup_elem(&BLOCKED_PCI, pci_addr)) {
+			return -ENOENT;
+		}
+	}
+
+	return 0;
+}
+
 /*
 	LSM to prevent open on DRM
 */
@@ -177,110 +283,8 @@ static __always_inline int get_pci_addr(struct dentry *dentry, char *pci_addr,
 SEC("lsm/file_open")
 int BPF_PROG(file_open, struct file *file)
 {
-	char filename[16] = {};
 	struct dentry *d = BPF_CORE_READ(file, f_path.dentry);
-	const unsigned char *name_ptr = NULL;
-
-	if (d) {
-		name_ptr = BPF_CORE_READ(d, d_name.name);
-	}
-
-	if (name_ptr) {
-		if (bpf_core_read_str(filename, sizeof(filename), name_ptr) <
-		    0) {
-			return 0;
-		}
-		// CardID Check
-		if (__builtin_memcmp(filename, "card", 4) == 0) {
-			if (is_dev_dri(d) != 0)
-				return 0;
-
-			__u32 id = 0;
-			int i = 4;
-			int is_match = 0;
-#pragma unroll
-			for (int j = 0; j < 9; j++) {
-				if (i >= sizeof(filename))
-					break;
-				char c = filename[i];
-				if (c >= '0' && c <= '9') {
-					id = id * 10 + (c - '0');
-					i++;
-					is_match = 1;
-				} else {
-					break;
-				}
-			}
-			if (is_match &&
-			    bpf_map_lookup_elem(&BLOCKED_CARDID, &id)) {
-				return -ENOENT;
-			}
-		}
-		// RenderID Check
-		else if (__builtin_memcmp(filename, "renderD", 7) == 0) {
-			if (is_dev_dri(d) != 0)
-				return 0;
-
-			__u32 id = 0;
-			int i = 7;
-			int is_match = 0;
-#pragma unroll
-			for (int j = 0; j < 9; j++) {
-				if (i >= sizeof(filename))
-					break;
-				char c = filename[i];
-				if (c >= '0' && c <= '9') {
-					id = id * 10 + (c - '0');
-					i++;
-					is_match = 1;
-				} else {
-					break;
-				}
-			}
-			if (is_match &&
-			    bpf_map_lookup_elem(&BLOCKED_RENDERID, &id)) {
-				return -ENOENT;
-			}
-		}
-		// NVIDIA Check
-		else if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
-			__u32 id = 0;
-			int i = 6;
-			int is_match = 0;
-#pragma unroll
-			for (int j = 0; j < 9; j++) {
-				if (i >= sizeof(filename))
-					break;
-				char c = filename[i];
-				if (c >= '0' && c <= '9') {
-					id = id * 10 + (c - '0');
-					i++;
-					is_match = 1;
-				} else {
-					break;
-				}
-			}
-			if (is_match &&
-			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
-				return -ENOENT;
-			}
-		}
-		// Config Check via pci
-		else if (__builtin_memcmp(filename, "config", 6) == 0) {
-			char pci_addr[16] = {};
-			if (get_pci_addr(d, pci_addr, sizeof(pci_addr)) != 0) {
-				return 0;
-			}
-
-			pci_addr[11] = '0';
-			pci_addr[12] = '\0';
-
-			if (bpf_map_lookup_elem(&BLOCKED_PCI, pci_addr)) {
-				return -ENOENT;
-			}
-		}
-	}
-	return 0;
+	return is_blocked_device(d);
 }
 /*
 	To prevent flatpak from crashing
@@ -302,41 +306,7 @@ int BPF_PROG(inode_permission, struct inode *inode, int mask)
 		bpf_core_field_offset(struct dentry, d_u.d_alias);
 	struct dentry *d = (struct dentry *)((void *)first - offset);
 	//
-
-	if (d) {
-		name_ptr = BPF_CORE_READ(d, d_name.name);
-	}
-
-	if (name_ptr) {
-		if (bpf_core_read_str(filename, sizeof(filename), name_ptr) <
-		    0) {
-			return 0;
-		}
-		// NVIDIA Check
-		if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
-			__u32 id = 0;
-			int i = 6;
-			int is_match = 0;
-#pragma unroll
-			for (int j = 0; j < 9; j++) {
-				if (i >= sizeof(filename))
-					break;
-				char c = filename[i];
-				if (c >= '0' && c <= '9') {
-					id = id * 10 + (c - '0');
-					i++;
-					is_match = 1;
-				} else {
-					break;
-				}
-			}
-			if (is_match &&
-			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
-				return -ENOENT;
-			}
-		}
-	}
-	return 0;
+	return is_blocked_device(d);
 }
 /*
 	To prevent flatpak from crashing, 
@@ -344,42 +314,6 @@ int BPF_PROG(inode_permission, struct inode *inode, int mask)
 SEC("lsm/inode_getattr")
 int BPF_PROG(inode_getattr, const struct path *path)
 {
-	char filename[16] = {};
 	struct dentry *d = BPF_CORE_READ(path, dentry);
-	const unsigned char *name_ptr = NULL;
-
-	if (d) {
-		name_ptr = BPF_CORE_READ(d, d_name.name);
-	}
-
-	if (name_ptr) {
-		if (bpf_core_read_str(filename, sizeof(filename), name_ptr) <
-		    0) {
-			return 0;
-		}
-		// NVIDIA Check
-		if (__builtin_memcmp(filename, "nvidia", 6) == 0) {
-			__u32 id = 0;
-			int i = 6;
-			int is_match = 0;
-#pragma unroll
-			for (int j = 0; j < 9; j++) {
-				if (i >= sizeof(filename))
-					break;
-				char c = filename[i];
-				if (c >= '0' && c <= '9') {
-					id = id * 10 + (c - '0');
-					i++;
-					is_match = 1;
-				} else {
-					break;
-				}
-			}
-			if (is_match &&
-			    bpf_map_lookup_elem(&BLOCKED_NVIDIAID, &id)) {
-				return -ENOENT;
-			}
-		}
-	}
-	return 0;
+	return is_blocked_device(d);
 }
