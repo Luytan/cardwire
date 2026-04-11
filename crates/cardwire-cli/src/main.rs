@@ -2,8 +2,10 @@ mod args;
 mod dbus;
 mod output;
 use args::{Args, CliMode, Commands};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use dbus::DaemonClient;
+
+const BIN_NAME: &str = "cardwire";
 
 fn handle_error(err: zbus::Error) {
     match err {
@@ -23,7 +25,15 @@ fn handle_error(err: zbus::Error) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+    /*
+       Handle completion before connecting to dbus
+    */
 
+    if let Commands::Completion { shell } = args.command {
+        let mut cmd = Args::command();
+        clap_complete::generate(shell, &mut cmd, BIN_NAME, &mut std::io::stdout());
+        return Ok(());
+    }
     let connection: zbus::Connection = zbus::connection::Builder::system()?.build().await?;
     let client: DaemonClient<'_> = DaemonClient::connect(&connection).await?;
 
@@ -59,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => handle_error(e),
             };
         }
+        _ => {}
     }
 
     Ok(())

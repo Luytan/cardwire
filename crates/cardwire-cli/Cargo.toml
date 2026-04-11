@@ -13,7 +13,7 @@ cardwire-core = { path = "../cardwire-core" }
 tokio.workspace = true
 zbus.workspace = true
 clap.workspace = true
-
+clap_complete.workspace = true
 [[bin]]
 name = "cardwire"
 path = "src/main.rs"

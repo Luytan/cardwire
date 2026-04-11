@@ -1,5 +1,5 @@
 use clap::{ArgAction, Args as ClapArgs, Parser, Subcommand, ValueEnum};
-
+use clap_complete::Shell;
 #[derive(Clone, Debug, ValueEnum)]
 pub enum CliMode {
     Integrated,
@@ -45,6 +45,11 @@ pub enum Commands {
         id: u32,
         #[command(flatten)]
         action: GpuAction,
+    },
+    #[command(about = "Generate shell completions", hide = true)]
+    Completion {
+        #[arg(help = "The shell to generate the completions for")]
+        shell: Shell,
     },
 }
 #[derive(ClapArgs, Debug)]
