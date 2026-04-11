@@ -179,6 +179,12 @@ static __always_inline int is_blocked_device(struct dentry *d)
 		return 0;
 	}
 
+	char comm[16] = {};
+	bpf_get_current_comm(comm, sizeof(comm));
+	if (__builtin_memcmp(comm, "cardwired", 9) == 0) {
+		return 0;
+	}
+
 	struct inode *inode = BPF_CORE_READ(d, d_inode);
 	if (inode) {
 		__u16 i_mode = BPF_CORE_READ(inode, i_mode);
@@ -201,19 +207,12 @@ static __always_inline int is_blocked_device(struct dentry *d)
 							&id)) {
 					return -ENOENT;
 				}
-				return 0;
 			}
+			return 0;
 		}
 	}
-	const unsigned char *name_ptr = BPF_CORE_READ(d, d_name.name);
-	if (!name_ptr)
-		return 0;
-
-	char filename[16] = {};
-	if (bpf_core_read_str(filename, sizeof(filename), name_ptr) < 0) {
-		return 0;
-	}
-	if (__builtin_memcmp(filename, "config", 6) == 0) {
+	struct qstr q = BPF_CORE_READ(d, d_name);
+	if (qstr_eq(q, "config", 6)) {
 		char pci_addr[16] = {};
 		if (get_pci_addr(d, pci_addr, sizeof(pci_addr)) != 0) {
 			return 0;
