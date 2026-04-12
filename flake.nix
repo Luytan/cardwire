@@ -25,7 +25,7 @@
         (fenixpkgs system).combine [
           (fenixpkgs system).stable.cargo
           (fenixpkgs system).stable.rustc
-          (fenixpkgs system).stable.rustfmt
+          (fenixpkgs system).latest.rustfmt
           (fenixpkgs system).stable.clippy
           (fenixpkgs system).stable.rust-src
         ];
@@ -77,7 +77,10 @@
           src = ./.;
           hooks = {
             nixfmt.enable = true;
-            rustfmt.enable = true;
+            rustfmt = {
+              enable = true;
+              package = toolchainFor system;
+            };
             clang-format.enable = true;
             yamlfmt.enable = true;
             commitizen.enable = true;

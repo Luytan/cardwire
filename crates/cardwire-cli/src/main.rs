@@ -23,7 +23,7 @@ fn handle_error(err: zbus::Error) {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     /*
        Handle completion before connecting to dbus
@@ -45,33 +45,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 CliMode::Manual => "manual".to_string(),
             };
 
-            match client.set_mode(mode_string).await {
-                Ok(response) => println!("{}", response),
+            match client.set_mode(&mode_string).await {
+                Ok(_) => println!("Mode has been set to {}", mode_string),
                 Err(e) => handle_error(e),
             };
         }
         Commands::Get => {
             match client.get_mode().await {
-                Ok(response) => eprintln!("{}", response),
+                Ok(response) => println!("{}", response),
                 Err(e) => handle_error(e),
             };
         }
-        Commands::List { full: _, json: _ } => {
-            //let mut response: Vec<(u32, String, String, String, bool, bool)> =
-            //    client.list_gpus().await?;
-            //response.sort_by_key(|row| row.0);
-            //output::print_gpu_table(&response);
-            match client.list_gpus().await {
-                Ok(mut response) => {
-                    response.sort_by_key(|row| row.0);
-                    output::print_gpu_table(&response);
-                }
-                Err(e) => handle_error(e),
+        Commands::List { full: _, json: _ } => match client.list_gpus().await {
+            Ok(mut response) => {
+                response.sort_by_key(|row| row.0);
+                output::print_gpu_table(&response);
             }
-        }
+            Err(e) => handle_error(e),
+        },
         Commands::Gpu { id, action } => {
             match client.set_gpu_block(id, action.block).await {
-                Ok(response) => println!("{}", response),
+                Ok(_) => println!("Mode has been set to {} on GPU {}", action.block, id),
                 Err(e) => handle_error(e),
             };
         }

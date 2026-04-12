@@ -1,42 +1,46 @@
-use std::collections::HashMap;
-use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::BufRead;
-use std::path::Path;
-
 use crate::pci::{IommuError, PciDevice, is_iommu_enabled, read_iommu_groups};
+use log::{error, info, warn};
+use std::{collections::HashMap, fs, fs::File, io, io::BufRead, path::Path};
 
 pub fn read_pci_devices() -> Result<HashMap<String, PciDevice>, IommuError> {
     match is_iommu_enabled() {
-        true => read_pci_devices_using_iommu(),
-        false => read_pci_devices_using_sysfs(),
+        true => {
+            info!("IOMMU detected, reading pci devices using iommu dir");
+            read_pci_devices_using_iommu()
+        }
+        false => {
+            info!("IOMMU not detected, reading pci devices using sysfs dir");
+            read_pci_devices_using_sysfs()
+        }
     }
 }
 
 fn read_pci_devices_using_iommu() -> Result<HashMap<String, PciDevice>, IommuError> {
     let iommu_groups = read_iommu_groups()?;
-    let pci_names = load_pci_name_db(Path::new("/usr/share/hwdata/pci.ids"))?;
+    let pci_names = load_pci_name_db(Path::new("/usr/share/hwdata/pci.ids")).unwrap_or_else(|e| {
+        warn!("Failed to load PCI name DB: {}", e);
+        PciNameDb::default()
+    });
     let mut devices_map = HashMap::new();
     for (group_id, group) in iommu_groups {
         // read "device" folder, look at each PCI ADDRESS
         for pci_address in group.devices {
-            let vendor_id = get_vendor_id(&pci_address)?;
-            let device_id = get_device_id(&pci_address)?;
+            let vendor_id = get_vendor_id(&pci_address);
+            let device_id = get_device_id(&pci_address);
 
-            let vendor_key = normalize_pci_id(&vendor_id);
-            let device_key = normalize_pci_id(&device_id);
+            let vendor_key = vendor_id.as_deref().map(normalize_device_id);
+            let device_key = device_id.as_deref().map(normalize_device_id);
 
-            let vendor_name = pci_names
-                .vendors
-                .get(&vendor_key)
-                .cloned()
-                .unwrap_or_else(|| "unknown vendor".to_string());
-            let device_name = pci_names
-                .devices
-                .get(&(vendor_key.clone(), device_key.clone()))
-                .cloned()
-                .unwrap_or_else(|| "unknown device".to_string());
+            let vendor_name = vendor_key
+                .as_ref()
+                .and_then(|k| pci_names.vendors.get(k))
+                .cloned();
+
+            let device_name = vendor_key
+                .as_ref()
+                .zip(device_key.as_ref())
+                .and_then(|(v, d)| pci_names.devices.get(&(v.clone(), d.clone())))
+                .cloned();
 
             let device = PciDevice {
                 pci_address: pci_address.clone(),
@@ -46,7 +50,7 @@ fn read_pci_devices_using_iommu() -> Result<HashMap<String, PciDevice>, IommuErr
                 vendor_name,
                 device_name,
                 driver: get_driver(&pci_address),
-                class: get_class(&pci_address)?,
+                class: get_class(&pci_address),
             };
             devices_map.insert(pci_address, device);
         }
@@ -55,29 +59,36 @@ fn read_pci_devices_using_iommu() -> Result<HashMap<String, PciDevice>, IommuErr
 }
 fn read_pci_devices_using_sysfs() -> Result<HashMap<String, PciDevice>, IommuError> {
     let sysfs = Path::new("/sys/bus/pci/devices");
-    let pci_names = load_pci_name_db(Path::new("/usr/share/hwdata/pci.ids"))?;
+    let pci_names = load_pci_name_db(Path::new("/usr/share/hwdata/pci.ids")).unwrap_or_else(|e| {
+        warn!("Failed to load PCI name DB: {}", e);
+        PciNameDb::default()
+    });
     let mut devices_map = HashMap::new();
-    for folder in fs::read_dir(sysfs)?.flatten() {
+    let sysfs_dir = fs::read_dir(sysfs).map_err(|e| {
+        error!("Failed to read sysfs PCI devices at {:?}: {}", sysfs, e);
+        IommuError::Io(e)
+    })?;
+    for folder in sysfs_dir.flatten() {
         let file_name = folder.file_name();
         let name = file_name
             .to_str()
             .ok_or("File name contains invalid UTF-8")?;
-        let vendor_id = get_vendor_id(name)?;
-        let device_id = get_device_id(name)?;
+        let vendor_id = get_vendor_id(name);
+        let device_id = get_device_id(name);
 
-        let vendor_key = normalize_pci_id(&vendor_id);
-        let device_key = normalize_pci_id(&device_id);
+        let vendor_key = vendor_id.as_deref().map(normalize_device_id);
+        let device_key = device_id.as_deref().map(normalize_device_id);
 
-        let vendor_name = pci_names
-            .vendors
-            .get(&vendor_key)
-            .cloned()
-            .unwrap_or_else(|| "unknown vendor".to_string());
-        let device_name = pci_names
-            .devices
-            .get(&(vendor_key.clone(), device_key.clone()))
-            .cloned()
-            .unwrap_or_else(|| "unknown device".to_string());
+        let vendor_name = vendor_key
+            .as_ref()
+            .and_then(|k| pci_names.vendors.get(k))
+            .cloned();
+
+        let device_name = vendor_key
+            .as_ref()
+            .zip(device_key.as_ref())
+            .and_then(|(v, d)| pci_names.devices.get(&(v.clone(), d.clone())))
+            .cloned();
 
         let device = PciDevice {
             pci_address: name.to_string(),
@@ -87,45 +98,52 @@ fn read_pci_devices_using_sysfs() -> Result<HashMap<String, PciDevice>, IommuErr
             vendor_name,
             device_name,
             driver: get_driver(name),
-            class: get_class(name)?,
+            class: get_class(name),
         };
         devices_map.insert(name.to_string(), device);
     }
     Ok(devices_map)
 }
-fn get_vendor_id(pci_address: &str) -> io::Result<String> {
+fn get_vendor_id(pci_address: &str) -> Option<String> {
     read_sysfs_trim(
         Path::new("/sys/bus/pci/devices")
             .join(pci_address)
             .join("vendor"),
     )
+    .ok()
 }
 
-fn get_device_id(pci_address: &str) -> io::Result<String> {
+fn get_device_id(pci_address: &str) -> Option<String> {
     read_sysfs_trim(
         Path::new("/sys/bus/pci/devices")
             .join(pci_address)
             .join("device"),
     )
+    .ok()
 }
 
-fn get_class(pci_address: &str) -> io::Result<String> {
+fn get_class(pci_address: &str) -> Option<String> {
     read_sysfs_trim(
         Path::new("/sys/bus/pci/devices")
             .join(pci_address)
             .join("class"),
     )
+    .ok()
 }
 
-fn get_driver(pci_address: &str) -> String {
-    fs::read_link(
+fn get_driver(pci_address: &str) -> Option<String> {
+    let driver_path = match fs::canonicalize(
         Path::new("/sys/bus/pci/devices")
             .join(pci_address)
             .join("driver"),
-    )
-    .ok()
-    .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-    .unwrap_or_else(|| "none".to_string())
+    ) {
+        Ok(driver_path) => driver_path,
+        Err(_) => return None,
+    };
+    driver_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string())
 }
 
 fn read_sysfs_trim(path: impl AsRef<Path>) -> io::Result<String> {
@@ -191,7 +209,7 @@ fn parse_pci_ids_line(line: &str) -> Option<(String, String)> {
     Some((raw_id.to_ascii_lowercase(), name))
 }
 
-fn normalize_pci_id(raw: &str) -> String {
+fn normalize_device_id(raw: &str) -> String {
     raw.trim()
         .trim_start_matches("0x")
         .trim_start_matches("0X")

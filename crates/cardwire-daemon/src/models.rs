@@ -1,14 +1,13 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-
 use crate::config::Config;
-use cardwire_core::gpu::{self, block_gpu};
-use cardwire_core::pci;
-use cardwire_ebpf::EbpfBlocker;
+use anyhow::Result;
+use cardwire_core::{
+    gpu::{self, GpuBlocker, block_gpu}, pci
+};
 use log::warn;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt};
 use tokio::sync::RwLock;
+use zbus::fdo::Error;
 
 #[derive(Deserialize, Serialize, PartialEq, zbus::zvariant::Type, Clone, Copy)]
 pub enum Modes {
@@ -27,18 +26,36 @@ impl fmt::Display for Modes {
     }
 }
 
+impl Modes {
+    pub fn parse(input: &str) -> zbus::fdo::Result<Modes> {
+        match input.to_ascii_lowercase().as_str() {
+            "integrated" => Ok(Self::Integrated),
+            "hybrid" => Ok(Self::Hybrid),
+            "manual" => Ok(Self::Manual),
+            unknown => Err(Error::InvalidArgs(format!(
+                "unknown mode: {unknown} \n expected integrated|hybrid|manual"
+            ))),
+        }
+    }
+}
+
 pub struct Daemon {
     pub state: DaemonState,
 }
 
 impl Daemon {
-    pub fn new(config: Config) -> Result<Self, Box<dyn Error>> {
+    pub fn new(config: Config) -> Result<Self> {
+        // TODO: what if no iommu folder
         let iommu: bool = pci::is_iommu_enabled();
+        // TODO: what if no pci device
         let pci_devices = pci::read_pci_devices()?;
+        // TODO: what if couldn't find gpu
         let gpu_list = gpu::read_gpu(&pci_devices)?;
-        let mut ebpf_blocker = cardwire_ebpf::EbpfBlocker::new()?;
+        // TODO: what if ebpf crash
+        let mut ebpf_blocker = GpuBlocker::new()?;
 
         // Apply config mode at startup
+        // TODO: use already existing function set_mode()
         match config.mode {
             Modes::Integrated | Modes::Hybrid => {
                 let block = config.mode == Modes::Integrated;
@@ -70,7 +87,7 @@ impl Daemon {
 pub struct DaemonState {
     pub config: RwLock<Config>,
     pub gpu_list: HashMap<usize, gpu::Gpu>,
-    pub ebpf_blocker: RwLock<EbpfBlocker>,
+    pub ebpf_blocker: RwLock<GpuBlocker>,
     // for future uses, related to vfio
     pub _pci_devices: HashMap<String, pci::PciDevice>,
     pub _iommu: bool,

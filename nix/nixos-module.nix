@@ -31,6 +31,7 @@ in
         Description = "Cardwire Daemon";
         After = [
           "dbus.service"
+          "systemd-udev-settle.service"
         ];
       };
       serviceConfig = {

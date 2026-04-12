@@ -1,5 +1,4 @@
-use std::io;
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -10,6 +9,9 @@ pub enum IommuError {
 
     #[error("Missing 'devices' directory in group path: {0}")]
     MissingDevicesDir(PathBuf),
+
+    #[error("Missing hwdata pci.ids file")]
+    MissingHWData,
 
     #[error("IO Error: {0}")]
     Io(#[from] io::Error),
