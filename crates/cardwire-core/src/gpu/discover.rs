@@ -52,7 +52,7 @@ fn build_gpu(device: &PciDevice) -> io::Result<Gpu> {
         pci: device.pci_address.clone(),
         render: drm_node_path(&device.pci_address, "render")?,
         card: drm_node_path(&device.pci_address, "card")?,
-        default: check_default(&device.pci_address)?,
+        default: None,
         nvidia,
         nvidia_minor,
     })
@@ -86,13 +86,65 @@ fn nvidia_get_minor(pci_address: &str) -> Option<u32> {
         .parse::<u32>()
         .ok()
 }
-fn check_default(pci_address: &str) -> io::Result<bool> {
-    let fb0_path = "/sys/class/graphics/fb0";
-    match fs::canonicalize(fb0_path) {
-        Ok(content) => Ok(content.to_string_lossy().contains(pci_address)),
-        Err(_) => {
-            debug!("check_default: {} isn't the default gpu", pci_address);
-            Ok(false)
+/*
+    Method from kwin
+*/
+pub fn check_default_drm_class(gpu_list: &mut HashMap<usize, Gpu>) -> io::Result<()> {
+    let class_path = Path::new("/sys/class/drm");
+    let mut drm_entries = Vec::new();
+    if class_path.exists() {
+        for entry in fs::read_dir(class_path)? {
+            let entry = entry?;
+            drm_entries.push(entry.file_name().to_string_lossy().into_owned());
         }
     }
+    #[derive(Default)]
+    struct GpuStats {
+        internal_displays: usize,
+        desktop_displays: usize,
+        total_displays: usize,
+    }
+
+    let mut stats: HashMap<usize, GpuStats> = HashMap::new();
+
+    for (id, gpu) in &mut *gpu_list {
+        let mut stat = GpuStats::default();
+        let prefix = format!("card{}-", gpu.card);
+        for name in &drm_entries {
+            if let Some(drm) = name.strip_prefix(&prefix) {
+                stat.total_displays += 1;
+
+                if drm.starts_with("eDP") {
+                    stat.internal_displays += 1;
+                } else {
+                    stat.desktop_displays += 1;
+                }
+            }
+        }
+
+        info!(
+            "gpu {} id: {} internal: {}, desktop: {}, total: {}",
+            gpu.name, id, stat.internal_displays, stat.desktop_displays, stat.total_displays
+        );
+
+        stats.insert(*id, stat);
+    }
+
+    let default = stats
+        .iter()
+        .max_by_key(|&(_, stats)| {
+            (
+                stats.internal_displays,
+                stats.desktop_displays,
+                stats.total_displays,
+            )
+        })
+        .unzip();
+
+    for gpu in gpu_list.values_mut() {
+        if gpu.id == *default.0.unwrap() as u32 {
+            gpu.default = Some(true);
+        }
+    }
+    Ok(())
 }
