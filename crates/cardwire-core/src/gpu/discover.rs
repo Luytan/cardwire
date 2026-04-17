@@ -1,6 +1,8 @@
 use crate::{gpu::models::Gpu, pci::PciDevice};
-use log::{debug, warn};
-use std::{collections::HashMap, fs, io, path::Path};
+use log::{info, warn};
+use std::{
+    collections::HashMap, fs, io::{self}, path::Path
+};
 
 pub fn read_gpu(pci_devices: &HashMap<String, PciDevice>) -> io::Result<HashMap<usize, Gpu>> {
     let mut gpus: Vec<Gpu> = pci_devices
@@ -56,18 +58,19 @@ fn build_gpu(device: &PciDevice) -> io::Result<Gpu> {
     })
 }
 
-fn drm_node_path(pci_address: &str, node_kind: &str) -> io::Result<String> {
+fn drm_node_path(pci_address: &str, node_kind: &str) -> io::Result<u32> {
+    let mut node_kind: String = node_kind.to_string();
     let by_path = format!("/dev/dri/by-path/pci-{pci_address}-{node_kind}");
-    match fs::canonicalize(&by_path) {
-        Ok(path) => Ok(path.to_string_lossy().into_owned()),
-        Err(err) => {
-            warn!(
-                "Could not find DRM node {} for PCI {}: {}",
-                by_path, pci_address, err
-            );
-            Err(err)
-        }
+    let kind_path = fs::canonicalize(&by_path)?;
+    let file_name = kind_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid device path"))?;
+    if node_kind == "render" {
+        node_kind = "renderD".to_string();
     }
+    let kind_number = file_name.strip_prefix(&node_kind).unwrap_or_default();
+    Ok(kind_number.parse::<u32>().unwrap_or(999))
 }
 fn nvidia_get_minor(pci_address: &str) -> Option<u32> {
     let nvidia_driver_proc = Path::new("/proc/driver/nvidia/gpus/")
