@@ -108,49 +108,6 @@ static __always_inline int qstr_eq(struct qstr q, const char *name, __u32 len)
 	return __builtin_memcmp(buf, name, len) == 0;
 }
 
-/*
-Check if file belongs to /dev/dri/, this prevent blocking normal files named
-renderD128 or card1
-*/
-static __always_inline int is_dev_dri(struct dentry *dentry)
-{
-	struct dentry *parent;
-	struct qstr q;
-
-	if (!dentry)
-		return 1;
-
-	// First parent must be "dri" (e.g., /dev/dri/card0)
-	parent = BPF_CORE_READ(dentry, d_parent);
-	if (!parent)
-		return 1;
-	q = BPF_CORE_READ(parent, d_name);
-	if (!qstr_eq(q, "dri", 3))
-		return 1;
-
-	// Check for the next parent in the path hierarchy.
-	parent = BPF_CORE_READ(parent, d_parent);
-	if (!parent)
-		return 1;
-	q = BPF_CORE_READ(parent, d_name);
-
-	if (qstr_eq(q, "dev", 3)) {
-		// If the parent was 'dev', the next parent must be the root '/'.
-		parent = BPF_CORE_READ(parent, d_parent);
-		if (!parent)
-			return 1;
-		q = BPF_CORE_READ(parent, d_name);
-		if (!qstr_eq(q, "/", 1))
-			return 1;
-	} else if (qstr_eq(q, "/", 1)) {
-		// Parent is already '/', which means 'dri' is at the root of its fs
-	} else {
-		return 1;
-	}
-
-	return 0;
-}
-
 static __always_inline int get_pci_addr(struct dentry *dentry, char *pci_addr,
 					int size)
 {

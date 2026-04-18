@@ -1,8 +1,5 @@
 use crate::gpu::{GpuResult, errors::GpuError, models::Gpu};
 use cardwire_ebpf::EbpfBlocker;
-use std::{
-    io::{Error as IoError, ErrorKind}, path::Path
-};
 
 pub struct GpuBlocker {
     inner: EbpfBlocker,
@@ -68,35 +65,9 @@ pub fn block_gpu(blocker: &mut GpuBlocker, gpu: &Gpu, block: bool) -> GpuResult<
 }
 
 fn gpu_node_ids(gpu: &Gpu) -> GpuResult<(u32, u32)> {
-    let card_id = parse_node_id(gpu.card_node(), "card")?;
-    let render_id = parse_node_id(gpu.render_node(), "renderD")?;
+    let card_id = *gpu.card_node();
+    let render_id = *gpu.render_node();
     Ok((card_id, render_id))
-}
-
-fn parse_node_id(node_path: &str, prefix: &str) -> GpuResult<u32> {
-    let node = Path::new(node_path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| {
-            IoError::new(
-                ErrorKind::InvalidData,
-                format!("Invalid DRM node path: {}", node_path),
-            )
-        })?;
-    let id = node.strip_prefix(prefix).ok_or_else(|| {
-        IoError::new(
-            ErrorKind::InvalidData,
-            format!("Unexpected DRM node name: {}", node),
-        )
-    })?;
-    if id.is_empty() || !id.chars().all(|ch| ch.is_ascii_digit()) {
-        return Err(IoError::new(
-            ErrorKind::InvalidData,
-            format!("Invalid DRM node id: {}", node),
-        )
-        .into());
-    }
-    Ok(id.parse()?)
 }
 
 fn map_gpu_error(err: impl std::fmt::Display) -> GpuError {

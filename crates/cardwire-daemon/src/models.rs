@@ -1,7 +1,7 @@
 use crate::config::Config;
 use anyhow::Result;
 use cardwire_core::{
-    gpu::{self, GpuBlocker, block_gpu}, pci
+    gpu::{self, GpuBlocker, block_gpu, check_default_drm_class}, pci
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,10 @@ impl Daemon {
         // TODO: what if no pci device
         let pci_devices = pci::read_pci_devices()?;
         // TODO: what if couldn't find gpu
-        let gpu_list = gpu::read_gpu(&pci_devices)?;
+        let mut gpu_list = gpu::read_gpu(&pci_devices)?;
+        if let Err(err) = check_default_drm_class(&mut gpu_list) {
+            warn!("Failed to determine default GPU: {}", err);
+        }
         // TODO: what if ebpf crash
         let mut ebpf_blocker = GpuBlocker::new()?;
 

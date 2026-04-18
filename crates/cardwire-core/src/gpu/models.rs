@@ -3,9 +3,9 @@ pub struct Gpu {
     pub id: u32,
     pub name: String,
     pub pci: String,
-    pub render: String,
-    pub card: String,
-    pub default: bool,
+    pub render: u32,
+    pub card: u32,
+    pub default: Option<bool>,
     pub nvidia: bool,
     pub nvidia_minor: u32,
 }
@@ -16,7 +16,7 @@ impl Gpu {
     }
 
     pub fn is_default(&self) -> bool {
-        self.default
+        self.default.unwrap_or_default()
     }
 
     pub fn id(&self) -> u32 {
@@ -27,11 +27,11 @@ impl Gpu {
         &self.name
     }
 
-    pub fn render_node(&self) -> &str {
+    pub fn render_node(&self) -> &u32 {
         &self.render
     }
 
-    pub fn card_node(&self) -> &str {
+    pub fn card_node(&self) -> &u32 {
         &self.card
     }
     pub fn is_nvidia(&self) -> &bool {
