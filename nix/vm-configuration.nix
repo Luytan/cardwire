@@ -35,8 +35,9 @@
         "-machine q35,accel=kvm,kernel-irqchip=split"
         "-device intel-iommu,intremap=on,device-iotlb=on"
         "-vga none"
-        "-device virtio-vga,id=gpu0"
-        "-device virtio-vga,id=gpu1"
+        "-device virtio-gpu-pci,id=igpu,max_outputs=2"
+        "-device virtio-gpu-pci,id=dgpu,max_outputs=1"
+        "-display gtk"
       ];
     };
   };
