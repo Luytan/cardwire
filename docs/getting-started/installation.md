@@ -18,7 +18,6 @@ reboot
 > [!NOTE]
 > i also maintain the cardwire-git package in case someone tries to take it.
 
-
 > [!NOTE]
 > both gets updated, in a near future, cardwire will provide a built package from github while cardwire-git will build from source.
 
@@ -46,9 +45,14 @@ imports = [ inputs.cardwire.nixosModules.default ];
 services.cardwire.enable = true;
 ```
 
-## Other distro
+## Other distros
 
 For now, other distros must clone the repo and use `make` to build and install Cardwire.
+
+Build dependencies:
+- cargo
+- clang
+- libbpf
 
 ```bash
 git clone https://github.com/luytan/cardwire.git
@@ -64,5 +68,6 @@ sudo make install
 > For mainstream distros, i will be making an official install methods, like a copr for Fedora and a .deb for Debian based.
 
 ## Non-systemd distros
+
 > [!WARNING]
 > Cardwire only supports systemd-based distros. If you want to use it on a non-systemd distro, either open a PR with patches for non-systemd or get it working on your setup.
