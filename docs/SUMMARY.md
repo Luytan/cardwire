@@ -3,8 +3,8 @@
 [Introduction](introduction.md)
 
 # Installation
-
-- [Installing cardwire](installing.md)
+- [Requirements](getting-started/requirements.md)
+- [Installation](getting-started/installation.md)
 
 # Diagnostics
 

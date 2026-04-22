@@ -6,44 +6,29 @@
 A GPU manager for Linux using eBPF LSM hooks to block GPUs
 
 # Disclaimer
-- This project is in early development. Expect bugs and incomplete functionality
-- The Makefile was AI-generated, i only use the flake.nix, be careful
-## Requirements
-- **Linux Kernel**: version 5.7 or later
-- **eBPF LSM**: Your kernel must have `CONFIG_BPF_LSM=y`, and you must enable LSM on your system
-## Quick Start
-**Arch:**
-```bash
-yay -S cardwire
-```
-**Nix with flakes:**
 
-flake.nix:
-```nix
-    cardwire = {
-      url = "github:luytan/cardwire";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-```
-then import:
-```nix
-  imports = [
-    inputs.cardwire.nixosModules.default
-  ];
-  services.cardwire.enable = true;
-```
+- This project is in early development. Expect bugs and incomplete functionality
+> [!NOTE]
+> Regarding the use of AI in this project: AI was used early on to prototype and fix some errors. The code has since been mostly rewritten by hand. The only AI-generated code left is in `pci_devices.rs`, specifically the `load_pci_name_db` function, which will be rewritten soon, and the Makefile
+
+## Getting Started
+
+Head to the [docs](https://luytan.github.io/cardwire) to see how to install Cardwire on your system
+
 ## Usage
 
 The `cardwire` CLI lets you manage GPU states and system modes
 
 ### Modes
-- **Integrated**: Blocks the discrete GPU 
+
+- **Integrated**: Blocks the discrete GPU
 - **Hybrid**: Unblocks the discrete GPU
 - **Manual**: Default mode for safety, allows individual GPU blocking/unblocking
 
 _Note: Integrated/Hybrid modes only work on host with two GPUs_
 
 _Note 2: Manual mode is not implemented_
+
 ```bash
 # Set system mode
 cardwire set integrated / hybrid / manual
@@ -68,6 +53,7 @@ The daemon reads its configuration from `/var/lib/cardwire/cardwire.toml`. If th
 mode = "Manual"
 block_vulkan = false
 ```
+
 `block_vulkan` is an experimental feature that blocks the nvidia's vulkan icd, must be used with caution
 
 ## Building and Development
@@ -92,6 +78,7 @@ nix run .#nixosConfigurations.x86_64-linux.config.system.build.vm
 ```
 
 ### Manual Compilation
+
 If you don't use Nix, ensure you have `clang`, `libbpf` and `cargo` installed (needed for eBPF compilation during the Rust build)
 
 ```bash
@@ -108,20 +95,24 @@ Cardwire uses eBPF with LSM hooks to intercept file operations on GPU device nod
 
 When a GPU is "blocked," the eBPF program returns `-ENOENT` for any syscall targeting that device. This provides several key benefits:
 
-*   **Instant App Startup:** Prevents applications (like Electron apps or GTK apps) from attempting to initialize the GPU, this eliminates the 3–4 second "hang" typically caused by waiting for a sleeping GPU to power up
-*   **Power Efficiency:** By blocking access at the syscall level, the GPU is never woken from its lowest power state (D3cold), extending battery life on laptops
-*   **Non-Invasive:** Unlike traditional methods that might require driver unloading, risky unbind or complex X11/Wayland setups, this approach is transparent to the rest of the system and easy to toggle
-*   _Also works with games_
+- **Instant App Startup:** Prevents applications (like Electron apps or GTK apps) from attempting to initialize the GPU, this eliminates the 3–4 second "hang" typically caused by waiting for a sleeping GPU to power up
+- **Power Efficiency:** By blocking access at the syscall level, the GPU is never woken from its lowest power state (D3cold), extending battery life on laptops
+- **Non-Invasive:** Unlike traditional methods that might require driver unloading, risky unbind or complex X11/Wayland setups, this approach is transparent to the rest of the system and easy to toggle
+- _Also works with games_
 
 ## Project Structure
+
 - `crates/cardwire-cli`: User CLI to interact with the daemon
 - `crates/cardwire-core`: Low-level GPU manager and IOMMU discovery
 - `crates/cardwire-daemon`: System daemon managing state and D-Bus communication
 - `crates/cardwire-ebpf`: BPF program and LSM hooks
 
 ## Notes
+
 - I'm still learning Rust, if some parts of the code are bad or unoptimized, feel free to open a PR
+
 ## Credits
+
 - Asus-linux Discord for helping me find the ebpf method
 - Caelestia shell for the flake.nix, i used it as a reference
 
