@@ -13,11 +13,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-      # Run on nix to get dependencies
-      - uses: cachix/install-nix-action@v31
-      # Enter dev shell
-      - name: Nix develop
-        run: nix develop
+      - name: Fix kernel header
+        run: |
+          sudo apt update
+          sudo apt install -y linux-headers-$(uname -r)
+          sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
         env:
