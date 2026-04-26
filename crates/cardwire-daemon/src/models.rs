@@ -103,13 +103,11 @@ impl Daemon {
         let mode = self.state.mode_state.read().await;
         let mut blocker = self.state.ebpf_blocker.write().await;
         // Apply vulkan block
-        println!("applying vulkan");
         blocker.set_vulkan_block(config.block_nvidia_vulkan())?;
         // Dropping the locks prevent set_mode being stuck
         drop(blocker);
         drop(config);
         // Apply mode
-        println!("applying mode");
         let mode_to_apply = mode.mode().to_string();
         drop(mode);
         self.set_mode(mode_to_apply).await?;
