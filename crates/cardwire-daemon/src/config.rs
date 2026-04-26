@@ -164,7 +164,7 @@ impl CardwireModeState {
         // Save to daemon state
         self.mode = new_mode;
         // Save the whole state into the json
-        let state_file = serde_json::to_string_pretty(&self.mode())?;
+        let state_file = serde_json::to_string_pretty(&self)?;
         fs::write(format!("{STATE_PATH}/mode_state.json"), state_file)?;
         Ok(())
     }
