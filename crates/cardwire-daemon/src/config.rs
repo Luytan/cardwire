@@ -1,11 +1,9 @@
 use crate::models::Modes;
 use anyhow::{Context, Ok};
 use cardwire_core::gpu::{Gpu, GpuBlocker, is_gpu_blocked};
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::{collections::HashMap, fs};
-use zbus::zvariant::Str;
 const CONFIG_PATH: &str = "/etc/cardwire";
 const STATE_PATH: &str = "/var/lib/cardwire";
 
@@ -102,11 +100,11 @@ impl CardwireGpuState {
             self.gpu.clear();
         }
         // Save to daemon state
-        for (_, gpu) in gpu_list {
+        for gpu in gpu_list.values() {
             self.gpu.insert(
                 gpu.pci.clone(),
                 CardwireGpuUnit {
-                    block: is_gpu_blocked(&blocker, &gpu)?,
+                    block: is_gpu_blocked(blocker, gpu)?,
                 },
             );
         }
@@ -122,11 +120,8 @@ impl CardwireGpuState {
     /// search key in gpu hashmap,
     pub fn gpu_block_state(&self, pci: &String) -> bool {
         match self.gpu.get_key_value(pci) {
-            Some(value) => {
-                let current_block = value.1.block;
-                return current_block;
-            }
-            None => return false,
+            Some(value) => value.1.block,
+            None => false,
         }
     }
 }
@@ -138,7 +133,7 @@ pub struct CardwireModeState {
 impl CardwireModeState {
     /// Read a gpu_state.json file and return into a struct
     pub fn build() -> anyhow::Result<CardwireModeState> {
-        let mode_file = format!("{STATE_PATH}/mode_state.json");
+        let mode_file = format!("{STATE_PATH}/mode.json");
         Ok(Self::parse_mode_state(&mode_file)?)
     }
     fn parse_mode_state(mode_file: &str) -> anyhow::Result<CardwireModeState> {
@@ -157,7 +152,7 @@ impl CardwireModeState {
         Ok(())
     }
     pub fn mode(&self) -> Modes {
-        return self.mode;
+        self.mode
     }
     /// Save the new mode into the daemon and to the mode_state.json file
     pub fn save_state(&mut self, new_mode: Modes) -> anyhow::Result<()> {
@@ -165,7 +160,7 @@ impl CardwireModeState {
         self.mode = new_mode;
         // Save the whole state into the json
         let state_file = serde_json::to_string_pretty(&self)?;
-        fs::write(format!("{STATE_PATH}/mode_state.json"), state_file)?;
+        fs::write(format!("{STATE_PATH}/mode.json"), state_file)?;
         Ok(())
     }
 }
@@ -193,10 +188,7 @@ fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
                 mode: Modes::Manual,
             };
             let default_mode_state = serde_json::to_string_pretty(&default_state)?;
-            fs::write(
-                format!("{}/mode_state.json", STATE_PATH),
-                default_mode_state,
-            )
+            fs::write(format!("{}/mode.json", STATE_PATH), default_mode_state)
         }
         FileKind::PciState => {
             let _ = fs::create_dir_all(STATE_PATH);

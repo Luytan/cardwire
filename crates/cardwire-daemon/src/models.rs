@@ -80,7 +80,7 @@ impl Daemon {
         // Do not stop the program if there is no gpu, cardwire will also be usable as a pci manager
         // in a near future
         if !gpu_list.is_empty() && gpu_state.is_default_state() {
-            let _ = gpu_state
+            gpu_state
                 .save_state(&gpu_list, &ebpf_blocker)
                 .context("Could not save gpu state")?;
         } else {

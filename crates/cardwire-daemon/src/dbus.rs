@@ -1,6 +1,6 @@
 use crate::models::{Daemon, Modes};
 use cardwire_core::gpu::{GpuRow, block_gpu, is_gpu_blocked};
-use log::{error, info, warn};
+use log::{error, info};
 use zbus::{fdo, interface};
 
 #[interface(name = "com.github.luytan.cardwire")]
@@ -43,7 +43,7 @@ impl Daemon {
                 let config = self.state.config.read().await;
                 if config.auto_apply_gpu_state() {
                     let gpu_state = self.state.gpu_state.read().await;
-                    for (_, gpu) in &self.state.gpu_list {
+                    for gpu in self.state.gpu_list.values() {
                         if gpu_state.gpu_block_state(&gpu.pci) {
                             block_gpu(&mut blocker, gpu, true)
                                 .map_err(|e| fdo::Error::Failed(e.to_string()))?;
@@ -53,7 +53,7 @@ impl Daemon {
                         }
                     }
                 } else {
-                    for (_, gpu) in &self.state.gpu_list {
+                    for gpu in self.state.gpu_list.values() {
                         block_gpu(&mut blocker, gpu, false)
                             .map_err(|e| fdo::Error::Failed(e.to_string()))?;
                     }
@@ -94,7 +94,7 @@ impl Daemon {
 
         info!("Set GPU {} ({}) block={}", gpu_id, gpu.pci_address(), block);
         let mut gpu_state = self.state.gpu_state.write().await;
-        let _ = gpu_state
+        gpu_state
             .save_state(&self.state.gpu_list, &blocker)
             .map_err(|e| fdo::Error::Failed(e.to_string()))?;
         Ok(())
