@@ -1,6 +1,6 @@
 use crate::models::{Daemon, Modes};
 use cardwire_core::gpu::{GpuRow, block_gpu, is_gpu_blocked};
-use log::{error, info};
+use log::{error, info, warn};
 use zbus::{fdo, interface};
 
 #[interface(name = "com.github.luytan.cardwire")]
@@ -53,7 +53,9 @@ impl Daemon {
                 }
             }
         }
-        let _ = current_mode.save_state(mode);
+        if let Err(e) = current_mode.save_state(mode) {
+            warn!("mode couldn't be saved to config: {e}");
+        }
         info!("Switched to {}", mode);
         Ok(())
     }
@@ -73,7 +75,7 @@ impl Daemon {
         // prevent default gpu from being blocked
         if gpu.is_default() {
             error!(
-                "Cannot set block state for GPU {}: device is marked as default",
+                "cannot set block state for GPU {}: device is marked as default",
                 gpu_id
             );
             return Err(fdo::Error::AccessDenied(format!(
@@ -87,9 +89,9 @@ impl Daemon {
 
         info!("Set GPU {} ({}) block={}", gpu_id, gpu.pci_address(), block);
         let mut gpu_state = self.state.gpu_state.write().await;
-        gpu_state
-            .save_state(&self.state.gpu_list, &blocker)
-            .map_err(|e| fdo::Error::Failed(e.to_string()))?;
+        if let Err(e) = gpu_state.save_state(&self.state.gpu_list, &blocker) {
+            warn!("could not save gpu_state to file: {e}");
+        }
         Ok(())
     }
 
