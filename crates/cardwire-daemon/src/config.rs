@@ -3,7 +3,7 @@ use anyhow::{Context, Ok};
 use cardwire_core::gpu::{Gpu, GpuBlocker, is_gpu_blocked};
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, io};
 const CONFIG_PATH: &str = "/etc/cardwire";
 const STATE_PATH: &str = "/var/lib/cardwire";
 
@@ -30,7 +30,7 @@ impl CardwireConfig {
     /// Parse the .toml file into a CardwireConfig
     fn parse_config(config_file: &str) -> anyhow::Result<CardwireConfig> {
         if !(fs::exists(config_file)?) {
-            Self::create_default_config().context("Could not create default dir")?;
+            Self::create_default_config().context("Could not create default dir for config")?;
         }
         let config_content =
             fs::read_to_string(config_file).context("Could not read cardwire.toml")?;
@@ -168,33 +168,66 @@ impl CardwireModeState {
 fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
     match kind {
         FileKind::Config => {
-            let _ = fs::create_dir_all(CONFIG_PATH);
+            create_default_folder(FileKind::Config)
+                .context("could not create default folder for cardwire.toml")?;
+            // Default config for cardwire
+            // TODO: Move to default trait?
             let default_config = toml::to_string_pretty(&CardwireConfig {
                 auto_apply_gpu_state: true,
                 block_nvidia_vulkan: false,
             })?;
+            // write
             fs::write(format!("{}/cardwire.toml", CONFIG_PATH), default_config)
         }
         FileKind::GpuState => {
-            let _ = fs::create_dir_all(STATE_PATH);
+            create_default_folder(FileKind::GpuState)
+                .context("could not create default folder for gpu_state.json")?;
+            // Default gpu_state for cardwire
+            // TODO: Move to default trait?
             let mut defaut_hash: HashMap<String, CardwireGpuUnit> = HashMap::new();
             let _ = defaut_hash.insert("Null".to_string(), CardwireGpuUnit { block: false });
             let default_gpu_state = serde_json::to_string_pretty(&defaut_hash)?;
+            // write
             fs::write(format!("{}/gpu_state.json", STATE_PATH), default_gpu_state)
         }
         FileKind::ModeState => {
-            let _ = fs::create_dir_all(STATE_PATH);
+            create_default_folder(FileKind::ModeState)
+                .context("could not create default folder for mode.json")?;
+            // Default mode for cardwire
+            // TODO: Move to default trait?
             let default_state = CardwireModeState {
                 mode: Modes::Manual,
             };
             let default_mode_state = serde_json::to_string_pretty(&default_state)?;
+            // write
             fs::write(format!("{}/mode.json", STATE_PATH), default_mode_state)
         }
         FileKind::PciState => {
-            let _ = fs::create_dir_all(STATE_PATH);
+            create_default_folder(FileKind::PciState)
+                .context("could not create default folder for pci_state.json")?;
+            // Default pci_state for cardwire, not implemented yet
+            // TODO: Move to default trait?
             let default_state = r#"{}"#;
             fs::write(format!("{}/pci_state.json", STATE_PATH), default_state)
         }
     }?;
+    Ok(())
+}
+/// Create all folders cardwire need
+fn create_default_folder(kind: FileKind) -> anyhow::Result<()> {
+    let directory: Option<&str>;
+    match kind {
+        FileKind::Config => directory = Some(CONFIG_PATH),
+        _ => directory = Some(STATE_PATH),
+    }
+    // unwrap because the option should not be None
+    // fs error that should make the daemon exit
+    if let Err(e) = fs::create_dir_all(directory.unwrap()) {
+        let _ = match e.kind() {
+            std::io::ErrorKind::PermissionDenied => return Err(e.into()),
+            io::ErrorKind::ReadOnlyFilesystem => return Err(e.into()),
+            _ => Ok(()),
+        };
+    };
     Ok(())
 }
