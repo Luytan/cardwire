@@ -53,7 +53,7 @@ impl Daemon {
                 }
             }
         }
-        if let Err(e) = current_mode.save_state(mode) {
+        if let Err(e) = current_mode.save_state(mode).await {
             warn!("mode couldn't be saved to config: {e}");
         }
         info!("Switched to {}", mode);
@@ -89,7 +89,7 @@ impl Daemon {
 
         info!("Set GPU {} ({}) block={}", gpu_id, gpu.pci_address(), block);
         let mut gpu_state = self.state.gpu_state.write().await;
-        if let Err(e) = gpu_state.save_state(&self.state.gpu_list, &blocker) {
+        if let Err(e) = gpu_state.save_state(&self.state.gpu_list, &blocker).await {
             warn!("could not save gpu_state to file: {e}");
         }
         Ok(())

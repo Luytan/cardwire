@@ -61,7 +61,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let iommu: bool = pci::is_iommu_enabled();
         let config = CardwireConfig::build().context("Error building config")?;
         let mut gpu_state = CardwireGpuState::build().context("Error building gpu_state")?;
@@ -81,6 +81,7 @@ impl Daemon {
         if !gpu_list.is_empty() && gpu_state.is_default_state() {
             gpu_state
                 .save_state(&gpu_list, &ebpf_blocker)
+                .await
                 .context("Could not save gpu state")?;
         } else {
             warn!("could not detect gpus, daemon is still running for pci management usage")

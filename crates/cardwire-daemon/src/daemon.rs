@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
         .format_timestamp_nanos()
         .filter_level(log::LevelFilter::Info)
         .init();
-    let mut daemon = Daemon::new()?;
+    let mut daemon = Daemon::new().await?;
     // Now apply the config
     let _ = daemon.apply_config().await;
     let conn_builder = connection::Builder::system()?;
