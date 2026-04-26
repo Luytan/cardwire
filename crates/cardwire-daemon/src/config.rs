@@ -226,8 +226,9 @@ fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
         }
     };
     // Handle the fs error here
-    if let Err(e) = result {
-        let _ = match e.kind() {
+    let result: anyhow::Result<()> = match result {
+        std::result::Result::Ok(()) => Ok(()),
+        std::result::Result::Err(e) => match e.kind() {
             io::ErrorKind::PermissionDenied => return Err(e.into()),
             io::ErrorKind::IsADirectory => return Err(e.into()),
             io::ErrorKind::ReadOnlyFilesystem => return Err(e.into()),
@@ -239,9 +240,9 @@ fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
             // if directory not found, try to create again
             io::ErrorKind::NotFound => create_default_folder(kind),
             _ => Ok(()),
-        };
-    }
-    Ok(())
+        },
+    };
+    result
 }
 /// Create all folders cardwire need
 fn create_default_folder(kind: FileKind) -> anyhow::Result<()> {
