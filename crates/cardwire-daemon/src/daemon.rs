@@ -18,15 +18,15 @@ async fn main() -> Result<()> {
     let config = CardwireConfig::build().context("Error building config")?;
     let gpu_state = CardwireGpuState::build().context("Error building gpu_state")?;
     let mode_state = CardwireModeState::build().context("Error building config")?;
-    let daemon = Daemon::new(config, gpu_state, mode_state)?;
-
+    let mut daemon = Daemon::new(config, gpu_state, mode_state)?;
+    // Now apply the config
+    let _ = daemon.apply_config().await;
     let conn_builder = connection::Builder::system()?;
     let _conn = conn_builder
         .name("com.github.luytan.cardwire")?
         .serve_at("/com/github/luytan/cardwire", daemon)?
         .build()
         .await?;
-
     info!("Daemon started");
     pending::<()>().await;
     Ok(())

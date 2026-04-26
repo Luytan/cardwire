@@ -76,7 +76,7 @@ impl Daemon {
             warn!("Failed to determine default GPU: {}", err);
         }
         // TODO: Exit if ebpf returns an error, or try to recover from it?
-        let mut ebpf_blocker = GpuBlocker::new()?;
+        let ebpf_blocker = GpuBlocker::new()?;
         // Do not stop the program if there is no gpu, cardwire will also be usable as a pci manager
         // in a near future
         if !gpu_list.is_empty() && gpu_state.is_default_state() {
@@ -86,9 +86,6 @@ impl Daemon {
         } else {
             warn!("could not detect gpus, daemon is still running for pci management usage")
         }
-
-        // TODO: Move to daemon.rs, should not be applied at new
-        ebpf_blocker.set_vulkan_block(config.block_nvidia_vulkan())?;
 
         Ok(Self {
             state: DaemonState {
@@ -101,5 +98,23 @@ impl Daemon {
                 ebpf_blocker: RwLock::new(ebpf_blocker),
             },
         })
+    }
+    pub async fn apply_config(&mut self) -> anyhow::Result<()> {
+        let config = self.state.config.read().await;
+        let mode = self.state.mode_state.read().await;
+        let mut blocker = self.state.ebpf_blocker.write().await;
+        // Apply vulkan block
+        println!("applying vulkan");
+        blocker.set_vulkan_block(config.block_nvidia_vulkan())?;
+        // Dropping the locks prevent set_mode being stuck
+        drop(blocker);
+        drop(config);
+        // Apply mode
+        println!("applying mode");
+        let mode_to_apply = mode.mode().to_string();
+        drop(mode);
+        self.set_mode(mode_to_apply).await?;
+
+        Ok(())
     }
 }
