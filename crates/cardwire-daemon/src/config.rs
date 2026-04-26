@@ -7,6 +7,7 @@ use std::{collections::HashMap, fs, io};
 const CONFIG_PATH: &str = "/etc/cardwire";
 const STATE_PATH: &str = "/var/lib/cardwire";
 
+#[allow(dead_code)]
 enum FileKind {
     Config,
     GpuState,
@@ -166,7 +167,7 @@ impl CardwireModeState {
 }
 /// Helper function to create default file, used for all config struct
 fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
-    match kind {
+    let result = match kind {
         FileKind::Config => {
             create_default_folder(FileKind::Config)
                 .context("could not create default folder for cardwire.toml")?;
@@ -210,24 +211,38 @@ fn create_default_file(kind: FileKind) -> anyhow::Result<()> {
             let default_state = r#"{}"#;
             fs::write(format!("{}/pci_state.json", STATE_PATH), default_state)
         }
-    }?;
+    };
+    // Handle the fs error here
+    if let Err(e) = result {
+        let _ = match e.kind() {
+            io::ErrorKind::PermissionDenied => return Err(e.into()),
+            io::ErrorKind::IsADirectory => return Err(e.into()),
+            io::ErrorKind::ReadOnlyFilesystem => return Err(e.into()),
+            // happen if in: /var/lib/cardwire/gpu_state.json
+            // cardwire is a file and not a directory
+            io::ErrorKind::NotADirectory => return Err(e.into()),
+            // ignore this one
+            io::ErrorKind::AlreadyExists => Ok(()),
+            // if directory not found, try to create again
+            io::ErrorKind::NotFound => create_default_folder(kind),
+            _ => Ok(()),
+        };
+    }
     Ok(())
 }
 /// Create all folders cardwire need
 fn create_default_folder(kind: FileKind) -> anyhow::Result<()> {
-    let directory: Option<&str>;
-    match kind {
-        FileKind::Config => directory = Some(CONFIG_PATH),
-        _ => directory = Some(STATE_PATH),
-    }
-    // unwrap because the option should not be None
+    let directory = match kind {
+        FileKind::Config => CONFIG_PATH,
+        _ => STATE_PATH,
+    };
     // fs error that should make the daemon exit
-    if let Err(e) = fs::create_dir_all(directory.unwrap()) {
+    if let Err(e) = fs::create_dir_all(directory) {
         let _ = match e.kind() {
-            std::io::ErrorKind::PermissionDenied => return Err(e.into()),
+            io::ErrorKind::PermissionDenied => return Err(e.into()),
             io::ErrorKind::ReadOnlyFilesystem => return Err(e.into()),
             _ => Ok(()),
         };
-    };
+    }
     Ok(())
 }
