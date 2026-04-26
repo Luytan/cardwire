@@ -16,7 +16,9 @@ async fn main() -> Result<()> {
         .init();
     let mut daemon = Daemon::new().await?;
     // Now apply the config
-    let _ = daemon.apply_config().await;
+    if let Err(e) = daemon.apply_config().await {
+        log::error!("Failed to apply startup configuration: {e}");
+    }
     let conn_builder = connection::Builder::system()?;
     let _conn = conn_builder
         .name("com.github.luytan.cardwire")?
