@@ -1,5 +1,7 @@
 # cardwire
 
+# REPO HAS BEEN MOVED TO https://github.com/OpenGamingCollective/cardwire
+
 [![AUR](https://img.shields.io/aur/version/cardwire)](https://aur.archlinux.org/packages/cardwire)
 [![GitHub License](https://img.shields.io/github/license/luytan/cardwire)](https://github.com/luytan/cardwire/blob/main/LICENSE)
 
